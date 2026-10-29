@@ -1,82 +1,23 @@
 {% include "header.html" %}
-<a id="options">
-  <h2>Options</h2>
-</a>
-
-<a id="expiration">
-  <h3>Expiration</h3>
-</a>
-<p>
-  Use the expiration dropdown to choose how long you want your upload to exist.
-  When the selected time has expired, it will be removed from the server.
-</p>
-
-{% if args.enable_burn_after %}
-<a id="burn-after">
-  <h3>Burn After</h3>
-</a>
-<p>
-  Use the burn after dropdown to set a limit on how many times your data can be
-  accessed before it will be removed from the server.
-</p>
-{%- endif %}
-
-{% if args.highlightsyntax %}
-<a id="syntax">
-  <h3>Syntax Highlighting</h3>
-</a>
-<p>
-  Use the syntax highlighting dropdown to enable syntax highlighting for your upload, making it easier to read.
-  You may choose to have the syntax highlighting done by your browser, which
-  will also recognise the language automatically. You can select server-side
-  highlighting, where you need to select the language yourself, but the code
-  will get highlighting without javascript.
-</p>
-{%- endif %}
-
-<a id="password">
-  <h3>Password</h3>
-</a>
-<p>
-  Use the password field to set a password for your upload. This will encrypt
-  your data while stored on our server with your password, and you will need to
-  enter the password to access (in case of private and secret uploads) or to
-  modify (in case of read-only uploads). Your password is encrypted, and in case
-  of secret uploads, we never even see it.
-</p>
-
-<a id="privacy">
-  <h3>Privacy</h3>
-</a>
-<p>
-  Use this dropdown to select the level of protection your upload needs. Use
-  lower privacy levels if you or your organisation host MicroBin, and higher
-  privacy levels if you are using a public MicroBin service.
-</p>
-<h4>Level 1: Public</h4>
-<p>This privacy level allows everyone to find, see, modify and remove your upload.</p>
-<h4>Level 2: Unlisted (recommended)</h4>
-<p>Unlisted uploads cannot be found unless someone knows its unique, random
-  identifier. If someone knows this identifier, they can see, modify and remove
-  the upload.</p>
-<h4>Level 3: Read-only</h4>
-<p>With this privacy setting, the upload cannot be found unless someone knows
-  its unique, random identifier. If someone knows this identifier, they can see
-  the contents but cannot modify or remove it without entering the password of
-  the upload.
-</p>
-<h4>Level 4: Private</h4>
-<p>With this privacy setting, the upload cannot be found unless someone knows
-  its unique, random identifier. If someone knows this identifier, they cannot
-  see, modify or remove it without entering the password of the upload. Your
-  upload and its attachments are encrypted, so they are stored safely.</p>
-<h4>Level 5: Secret</h4>
-<p>With this privacy setting, the upload cannot be found unless someone knows
-  its unique, random identifier. If someone knows this identifier, they cannot
-  see, modify or remove it without entering the password of the upload. Your
-  browser sends us an already encrypted version, so the unencrypted data and
-  password never even leave your device. This option requires you to enter your
-  password many times when accessing your data, but is extremely safe.</p>
-
-
+<article class="help">
+  <h2>把分享变简单</h2>
+  <p>粘贴内容或添加文件，点击「创建分享」，即可获得链接与二维码。</p>
+  <h3 id="expiration">保存时间</h3>
+  <p>可以选择自动过期的时间，或按站点设置永久保存。到期后，内容和附件会被删除。</p>
+  <h3 id="burn-after">阅后即焚</h3>
+  <p>默认不限阅读次数。选择次数后，内容会在达到指定阅读次数时删除。</p>
+  <h3 id="syntax">代码高亮</h3>
+  <p>选择代码语言或自动识别，让代码更易阅读；普通文字使用「纯文本」即可。</p>
+  <h3 id="privacy">可见范围</h3>
+  <p>「公开」会出现在全部分享中；「仅链接可见」不会出现在列表，但任何知道链接的人都能查看，内容可编辑时也能修改或删除。选择「只读」并设置密码后，访问者可以查看，但修改和删除需要密码。</p>
+  <h3 id="password">访问密码</h3>
+  <p>公开分享不需要密码。选择「只读」时，请设置用于修改和删除的密码。</p>
+  <h3 id="encryption">加密</h3>
+  <p>启用服务器加密或浏览器加密时，需要相应密码才能读取内容。请自行保存密码。</p>
+  <h3>图片与文件</h3>
+  <p>点击文件区域选择附件，或直接拖入文件。支持一次选择多个文件，未加密时单文件最大 {{ args.max_file_size_unencrypted_mb }} MiB。上传后可预览支持的内容，也可下载原文件。</p>
+  <h3>短链接与二维码</h3>
+  <p>在内容栏粘贴完整网址即可生成短链接。结果页直接显示分享二维码，手机扫码即可访问。分享链接统一为域名加编号：纯单文件直达文件，文字或多文件打开预览，网址直接跳转。</p>
+  <p>管理页面用于返回预览、编辑或删除；也可在「管理与更多链接」中复制文件直链和图片 Markdown。管理地址沿用原有访问设置。</p>
+</article>
 {% include "footer.html" %}

@@ -45,15 +45,7 @@
                             href="{{ args.public_path_as_str()}}/upload/{{pasta.id_as_animals()}}">{{pasta.id_as_animals()}}</a>
                     </td>
                     <td>
-                        {% if args.public_path_as_str() != "" %}
-                        {% if args.short_path_as_str() == "" %}
-                        <a style="margin-right:1rem; cursor: pointer;" class="copy-button" null
-                            data-url="{{ args.public_path_as_str()}}/upload/{{pasta.id_as_animals()}}">Copy</a>
-                        {% else %}
-                        <a style="margin-right:1rem; cursor: pointer;" class="copy-button" data-url="{{ args.short_path_as_str()
-                        }}/p/{{pasta.id_as_animals()}}">Copy</a>
-                        {% endif %}
-                        {%- endif %}
+                        <button type="button" class="copy-button" data-url="{{ pasta.share_url() }}">Copy</button>
                     </td>
                     <td>
                         {{pasta.created_as_string()}}
@@ -69,17 +61,17 @@
                         {% if pasta.attachments.is_some() %}
                         <a style="margin-right:1rem"
                             href="{{ args.public_path_as_str() }}/upload/{{pasta.id_as_animals()}}">
-                            {{ 1 + pasta.attachments.as_ref().unwrap().len() }} Files
+                            {{ 1 + pasta.attachments.as_ref().unwrap().len() }} 个文件
                         </a>
                         {% else if pasta.file.is_some() %}
                         <a style="margin-right:1rem"
                             href="{{ args.public_path_as_str() }}/file/{{pasta.id_as_animals()}}">
                             {% if pasta.file.as_ref().unwrap().is_image() %}
-                            Image
+                            图片
                             {%- else if pasta.file.as_ref().unwrap().is_video() %}
-                            Video
+                            视频
                             {%- else %}
-                            File
+                            文件
                             {%- endif %}
                         </a>
                         {%- endif %}
@@ -135,13 +127,7 @@
                             href="{{ args.public_path_as_str() }}/upload/{{pasta.id_as_animals()}}">{{pasta.id_as_animals()}}</a>
                     </td>
                     <td>
-                        {% if args.short_path_as_str() == "" %}
-                        <a style="margin-right:1rem; cursor: pointer;" class="copy-button"
-                            data-url="{{ args.public_path_as_str()                    }}/url/{{pasta.id_as_animals()}}">Copy</a>
-                        {% else %}
-                        <a style="margin-right:1rem; cursor: pointer;" class="copy-button" data-url="{{ args.short_path_as_str()
-                        }}/u/{{pasta.id_as_animals()}}">Copy</a>
-                        {% endif %}
+                        <button type="button" class="copy-button" data-url="{{ pasta.share_url() }}">Copy</button>
                     </td>
                     <td>
                         {{pasta.created_as_string()}}
@@ -151,7 +137,7 @@
                     </td>
                     <td>
                         <a style="margin-right:1rem"
-                            href="{{ args.public_path_as_str() }}/url/{{pasta.id_as_animals()}}">Redirect</a>
+                            href="{{ args.public_path_as_str() }}/url/{{pasta.id_as_animals()}}">打开网址</a>
                     </td>
                     <td>
                         {% if pasta.editable %}
@@ -179,7 +165,7 @@
     for (var i = 0; i < copyURLBtns.length; i++) {
         copyURLBtns.item(i).addEventListener("click", event => {
             event.srcElement
-            navigator.clipboard.writeText(event.srcElement.getAttribute("data-url"))
+            navigator.clipboard.writeText(new URL(event.currentTarget.dataset.url, location.href).href)
             event.srcElement.innerHTML = "Copied"
             setTimeout(() => {
                 event.srcElement.innerHTML = "Copy"

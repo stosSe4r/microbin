@@ -1,15 +1,15 @@
 {% if !args.hide_footer %}
 
-<p style="font-size: small; text-align: center;margin-top: 2rem;">
+<p class="site-footer">
     {% if args.footer_text.as_ref().is_none() %}
-    <a href="https://microbin.eu">MicroBin</a> by Dániel Szabó and the FOSS
-    Community. Let's keep the Web <b>compact</b>, <b>accessible</b> and
-    <b>humane</b>! {%- else %} {{ args.footer_text.as_ref().unwrap()|safe }} {%-
-    endif %}
+    <span id="site-credit">随手分享，让传递更简单</span>
+    <span>由 <a href="https://microbin.eu">MicroBin</a> 驱动</span>
+    {% else %}{{ args.footer_text.as_ref().unwrap()|safe }}{% endif %}
 </p>
 
 {%- endif %}
 
+<script src="{{ args.public_path_as_str() }}/static/theme.js"></script>
 </body>
 
 </html>

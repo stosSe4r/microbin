@@ -93,6 +93,31 @@ pub struct Pasta {
 }
 
 impl Pasta {
+    /// The same public address is used by copy buttons, lists and QR codes.
+    pub fn share_url(&self) -> String {
+        format!("{}/{}", ARGS.short_path_as_str(), self.id_as_animals())
+    }
+
+    /// Keep mixed uploads and encrypted files on the preview page.
+    pub fn share_target(&self) -> String {
+        let id = self.id_as_animals();
+        let has_attachments = self.attachments.as_ref().is_some_and(|files| !files.is_empty());
+        if !self.encrypt_client && !self.encrypt_server && !has_attachments {
+            if self.file.is_some() && self.content.is_empty() {
+                let preview = if self.file.as_ref().unwrap().embeddable() {
+                    "?preview=true"
+                } else {
+                    ""
+                };
+                return format!("/file/{id}{preview}");
+            }
+            if self.pasta_type == "url" && !self.has_file() {
+                return format!("/u/{id}");
+            }
+        }
+        format!("/p/{id}")
+    }
+
     pub fn id_as_animals(&self) -> String {
         if ARGS.hash_ids {
             to_hashids(self.id)

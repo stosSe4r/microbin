@@ -3,6 +3,8 @@
 
 # MicroBin
 
+[中文说明与 Docker 部署](README.zh-CN.md) · This fork adds root-level share links, inline QR codes and a Chinese interface.
+
 ![Build](https://github.com/szabodanika/microbin/actions/workflows/rust.yml/badge.svg)
 [![crates.io](https://img.shields.io/crates/v/microbin.svg)](https://crates.io/crates/microbin)
 [![Docker Image](https://github.com/szabodanika/microbin/actions/workflows/release.yml/badge.svg)](https://hub.docker.com/r/danielszabo99/microbin)

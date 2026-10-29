@@ -1,0 +1,9 @@
+.git
+target
+data
+pasta_data
+microbin_data
+node_modules
+*.env
+*.log
+tests

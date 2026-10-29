@@ -5,7 +5,7 @@ use crate::util::animalnumbers::to_u64;
 use crate::util::auth;
 use crate::util::db::update;
 use crate::util::hashids::to_u64 as hashid_to_u64;
-use crate::util::misc::remove_expired;
+use crate::util::misc::{remove_expired, string_to_qr_svg};
 use crate::AppState;
 use actix_multipart::Multipart;
 use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
@@ -19,6 +19,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 struct PastaTemplate<'a> {
     pasta: &'a Pasta,
     args: &'a Args,
+    qr: String,
 }
 
 fn pastaresponse(
@@ -92,6 +93,11 @@ fn pastaresponse(
             PastaTemplate {
                 pasta: &pastas[index],
                 args: &ARGS,
+                qr: if ARGS.qr && ARGS.short_path_as_str() != "" {
+                    string_to_qr_svg(&pastas[index].share_url())
+                } else {
+                    String::new()
+                },
             }
             .render()
             .unwrap(),
@@ -195,6 +201,27 @@ fn verify_owner_token(token: &str, id: &str) -> bool {
 #[get("/p/{id}")]
 pub async fn getshortpasta(data: web::Data<AppState>, id: web::Path<String>) -> HttpResponse {
     pastaresponse(data, id, String::from(""), false)
+}
+
+pub async fn shortlink(data: web::Data<AppState>, id: web::Path<String>) -> HttpResponse {
+    let mut pastas = data.pastas.lock().unwrap();
+    remove_expired(&mut pastas);
+
+    // Match canonical slugs, without treating a malformed ID as upload zero.
+    if let Some(pasta) = pastas.iter().find(|pasta| pasta.id_as_animals() == *id) {
+        // The destination can change after an edit; never permanently cache it.
+        return HttpResponse::Found()
+            .append_header((
+                "Location",
+                format!("{}{}", ARGS.public_path_as_str(), pasta.share_target()),
+            ))
+            .append_header(("Cache-Control", "no-store"))
+            .finish();
+    }
+
+    HttpResponse::NotFound()
+        .content_type("text/html; charset=utf-8")
+        .body(ErrorTemplate { args: &ARGS }.render().unwrap())
 }
 
 fn urlresponse(data: web::Data<AppState>, id: web::Path<String>) -> HttpResponse {

@@ -6,15 +6,7 @@
 
 
 <div style="text-align: center; padding: 3rem;">
-  {% if pasta.pasta_type == "url" %}
-  <a href="{{ args.public_path_as_str() }}/url/{{pasta.id_as_animals()}}">
-    {{qr}}
-  </a>
-  {% else %}
-  <a href="{{ args.public_path_as_str() }}/upload/{{pasta.id_as_animals()}}">
-    {{qr}}
-  </a>
-  {% endif %}
+  <a href="{{ pasta.share_url()|escape }}" aria-label="打开分享链接">{{ qr }}</a>
 </div>
 
 <style>

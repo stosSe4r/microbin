@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 
 <head>
     {% if args.title.as_ref().is_none() %}
@@ -15,7 +15,7 @@
     <script type="text/javascript" src="{{ args.public_path_as_str() }}/static/aes.js"></script>
     {% if !args.pure_html %} {% if args.custom_css.as_ref().is_none() ||
     args.custom_css.as_ref().unwrap() == "" %}
-    <link rel="stylesheet" href="{{ args.public_path_as_str() }}/static/water.css">
+    <link rel="stylesheet" href="{{ args.public_path_as_str() }}/static/theme.css">
     {%- else %}
     <link rel="stylesheet" href="{{ args.custom_css.as_ref().unwrap() }}">
     {%- endif %} {%- endif %}

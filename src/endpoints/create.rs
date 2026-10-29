@@ -41,7 +41,7 @@ pub async fn index() -> impl Responder {
     )
 }
 
-#[get("/{status}")]
+#[get("/{status:incorrect}")]
 pub async fn index_with_status(param: web::Path<String>) -> HttpResponse {
     let status = param.into_inner();
 

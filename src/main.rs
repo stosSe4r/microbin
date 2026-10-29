@@ -9,7 +9,7 @@ use crate::pasta::Pasta;
 use crate::util::db::read_all;
 use crate::util::telemetry::start_telemetry_thread;
 use actix_web::middleware::Condition;
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{guard, middleware, web, App, HttpServer};
 use actix_web_httpauth::middleware::HttpAuthentication;
 use chrono::Local;
 use env_logger::Builder;
@@ -136,6 +136,17 @@ async fn main() -> std::io::Result<()> {
             .service(auth_upload::auth_raw_pasta)
             .service(auth_upload::auth_edit_private)
             .service(auth_upload::auth_remove_private)
+            // Reserve the single-segment protected endpoints before matching a slug.
+            .service(
+                web::resource("/{id}")
+                    .guard(guard::fn_guard(|ctx| {
+                        !matches!(
+                            ctx.head().uri.path().trim_matches('/'),
+                            "list" | "admin" | "auth_admin" | "upload" | "incorrect"
+                        )
+                    }))
+                    .route(web::get().to(pasta_endpoint::shortlink))
+            )
             // Protected Services (Require Login)
             .service(
                 web::scope("")

@@ -1,52 +1,69 @@
 {% include "header.html" %}
-<div style="float: left">
-  {% if pasta.content != "" %}
-  <button id="copy-text-button" class="small-button" style="margin-right:
-  0.5rem">
-    Copy Text
-  </button>
+<section id="share-panel" class="share-panel" aria-label="分享链接与二维码">
+  <div class="share-content">
+    <span class="eyebrow">分享已就绪</span>
+    <h1>一个链接，轻松分享。</h1>
+    <p class="share-hint">把下面的链接发给对方，或直接扫码打开。</p>
+    <label for="share-url">分享链接</label>
+    <div class="link-row">
+      <input id="share-url" type="url" readonly data-absolute-url value="{{ pasta.share_url()|escape }}" onclick="this.select()">
+      <button id="copy-url-button" type="button" aria-live="polite">复制链接</button>
+    </div>
+    <details class="more-links">
+      <summary>管理与更多链接</summary>
+      <label for="management-url">管理页面</label>
+      <div class="link-row">
+        <input id="management-url" type="url" readonly data-absolute-url value="{{ args.public_path_as_str() }}/upload/{{pasta.id_as_animals()}}" onclick="this.select()">
+        <button type="button" data-copy-target="management-url" aria-live="polite">复制管理链接</button>
+      </div>
+      <p class="share-hint">返回此页面可预览、编辑或删除。管理地址只是方便操作的入口，仍遵循原有访问设置。</p>
+      {% if pasta.file.is_some() && !pasta.encrypt_client && !pasta.encrypt_server %}
+      <label for="file-url">文件直链{% if pasta.attachments.is_some() %}（第一个文件）{% endif %}</label>
+      <div class="link-row">
+        <input id="file-url" type="url" readonly data-absolute-url value="{{ args.public_path_as_str() }}/file/{{pasta.id_as_animals()}}{% if pasta.file.as_ref().unwrap().embeddable() %}?preview=true{% endif %}" onclick="this.select()">
+        <button type="button" data-copy-target="file-url" aria-live="polite">复制直链</button>
+      </div>
+      {% if pasta.file.as_ref().unwrap().is_image() %}
+      <button type="button" data-copy-target="file-url" data-markdown aria-live="polite">复制图片 Markdown</button>
+      {% endif %}
+      {% endif %}
+    </details>
+  </div>
+  {% if qr != "" %}
+  <div class="share-qr">
+    <a href="{{ pasta.share_url()|escape }}" aria-label="打开分享链接">{{ qr }}</a>
+    <p>扫码打开分享链接</p>
+  </div>
+  {% endif %}
+</section>
 
-  {% if args.public_path_as_str() != "" && pasta.pasta_type == "url" %}
-  <button id="copy-redirect-button" class="small-button" style="margin-right:
-  0.5rem">
-    Copy Redirect
-  </button>
-  {%- endif %}
-  <a style="margin-right: 1rem" href="{{ args.public_path_as_str()  }}/raw/{{pasta.id_as_animals()}}">Raw Text
-    Content</a>
-  {%- endif %} {% if args.qr && args.public_path_as_str() != "" %}
-  <a style="margin-right: 1rem" href="{{ args.public_path_as_str()  }}/qr/{{pasta.id_as_animals()}}">QR</a>
-  {%- endif %} {% if pasta.editable && !pasta.encrypt_client %}
-  <a style="margin-right: 1rem" href="{{ args.public_path_as_str()  }}/edit/{{pasta.id_as_animals()}}">Edit</a>
-  {%- endif %}
+<div class="share-toolbar">
+  {% if pasta.content != "" %}
+  <button id="copy-text-button" type="button" aria-live="polite">复制内容</button>
+  <a href="{{ args.public_path_as_str() }}/raw/{{pasta.id_as_animals()}}">原始文本</a>
+  {% endif %}
+  {% if pasta.editable && !pasta.encrypt_client %}
+  <a href="{{ args.public_path_as_str() }}/edit/{{pasta.id_as_animals()}}">编辑</a>
+  {% endif %}
   {% if pasta.editable %}
-  <a style="margin-right: 1rem" href="{{ args.public_path_as_str()  }}/remove/{{pasta.id_as_animals()}}">Remove</a>
-  {%- endif %}
- 
-</div>
-<div style="float: right; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-  <a href="{{ args.public_path_as_str()  }}/upload/{{pasta.id_as_animals()}}"><i>{{pasta.id_as_animals()}}</i></a>
-  {% if args.public_path_as_str() != "" %}
-  <button id="copy-url-button" class="small-button">Copy URL</button>
-  {%- endif %}
+  <a href="{{ args.public_path_as_str() }}/remove/{{pasta.id_as_animals()}}" onclick="return confirm('确定删除这条分享及其附件吗？')">删除</a>
+  {% endif %}
   {% if pasta.encrypt_client && pasta.attachments.is_some() %}
   <button id="download-all-encrypted-button" class="small-button">Download all (Decrypted Zip)</button>
-  {%- endif %}
+  {% endif %}
   {% if pasta.attachments.is_some() %}
-  <select style="margin-left: 1rem" id="view-selector" class="small-button">
+  <label class="visually-hidden" for="view-selector">附件视图</label>
+  <select id="view-selector" class="small-button">
     <option value="gallery">Gallery</option>
     <option value="stream">Stream</option>
     <option value="list">List</option>
   </select>
-  {%- endif %}
-  {% if !pasta.encrypt_client && pasta.attachments.is_some() %}
-  <button id="download-all-unencrypted-button" class="small-button" onclick="window.location.href='{{ args.public_path_as_str() }}/archive/{{pasta.id_as_animals()}}'">Download all as ZIP</button>
-  {%- endif %}
-  
+  {% if !pasta.encrypt_client %}
+  <button id="download-all-unencrypted-button" class="small-button" onclick="window.location.href='{{ args.public_path_as_str() }}/archive/{{pasta.id_as_animals()}}'">下载全部 ZIP</button>
+  {% endif %}
+  {% endif %}
 </div>
 
-<br>
-<br>
 {% if pasta.encrypt_client %}
 <span style="margin-left: auto; margin-right: auto; display: flex;
 justify-content: center; align-items: center;">
@@ -157,9 +174,9 @@ pasta.file_embeddable() && !pasta.encrypt_client && !pasta.attachments.is_some()
     <table style="width: 100%; border-collapse: collapse;">
         <thead>
             <tr style="text-align: left; border-bottom: 1px solid #ccc;">
-                <th style="padding: 8px;">Filename</th>
-                <th style="padding: 8px;">Size</th>
-                <th style="padding: 8px;">Action</th>
+                <th style="padding: 8px;">文件名</th>
+                <th style="padding: 8px;">大小</th>
+                <th style="padding: 8px;">操作</th>
             </tr>
         </thead>
         <tbody>
@@ -172,8 +189,8 @@ pasta.file_embeddable() && !pasta.encrypt_client && !pasta.attachments.is_some()
                     {% if !pasta.encrypt_client %}
                     <a href="{{ args.public_path_as_str() }}/file/{{pasta.id_as_animals()}}?fname={{ file.url_encoded_name() }}"
                        class="download-link" data-filename="{{ file.name() }}"
-                       {% if !pasta.encrypt_server %}download{% endif %}>Download</a>
-                    {% else %}<em>Encrypted</em>{% endif %}
+                       {% if !pasta.encrypt_server %}download{% endif %}>下载</a>
+                    {% else %}<em>已加密</em>{% endif %}
                 </td>
             </tr>
             {% endif %}
@@ -185,8 +202,8 @@ pasta.file_embeddable() && !pasta.encrypt_client && !pasta.attachments.is_some()
                     {% if !pasta.encrypt_client %}
                     <a href="{{ args.public_path_as_str() }}/file/{{pasta.id_as_animals()}}?fname={{ file.url_encoded_name() }}"
                        class="download-link" data-filename="{{ file.name() }}"
-                       {% if !pasta.encrypt_server %}download{% endif %}>Download</a>
-                    {% else %}<em>Encrypted</em>{% endif %}
+                       {% if !pasta.encrypt_server %}download{% endif %}>下载</a>
+                    {% else %}<em>已加密</em>{% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -217,11 +234,12 @@ pasta.file_embeddable() && !pasta.encrypt_client && !pasta.attachments.is_some()
 <script>
   const copyURLBtn = document.getElementById("copy-url-button")
   const copyTextBtn = document.getElementById("copy-text-button")
-  const copyRedirectBtn = document.getElementById("copy-redirect-button")
   var content = `{{ pasta.content_escaped() }}`
   const contentElement = document.getElementById("code");
-  const url = (`{{ args.short_path_as_str()}}` === "") ? `{{ args.public_path_as_str() }}/upload/{{pasta.id_as_animals()}}` : `{{ args.short_path_as_str()}}/p/{{pasta.id_as_animals()}}`
-  const redirect_url = (`{{ args.short_path_as_str()}}` === "") ? `{{ args.public_path_as_str() }}/url/{{pasta.id_as_animals()}}` : `{{ args.short_path_as_str()}}/u/{{pasta.id_as_animals()}}`
+  document.querySelectorAll('input[data-absolute-url]').forEach(input => {
+    input.value = new URL(input.value, window.location.href).href;
+  });
+  const url = document.getElementById('share-url').value;
 
   const te = new TextEncoder();
 
@@ -276,9 +294,9 @@ pasta.file_embeddable() && !pasta.encrypt_client && !pasta.attachments.is_some()
   }
 
   function showCopiedFeedback(buttonElement, originalLabel) {
-    buttonElement.innerHTML = "Copied";
+    buttonElement.textContent = "已复制";
     setTimeout(() => {
-      buttonElement.innerHTML = originalLabel;
+      buttonElement.textContent = originalLabel;
     }, 1000);
   }
 
@@ -305,19 +323,21 @@ pasta.file_embeddable() && !pasta.encrypt_client && !pasta.attachments.is_some()
 
   if (copyURLBtn) {
     copyURLBtn.addEventListener("click", () => {
-      copyToClipboard(url, copyURLBtn, "Copy URL");
+      copyToClipboard(url, copyURLBtn, "复制链接");
     })
   }
-  if (copyRedirectBtn) {
-    copyRedirectBtn.addEventListener("click", () => {
-      copyToClipboard(redirect_url, copyRedirectBtn, "Copy Redirect");
-    })
-  }
+  document.querySelectorAll('[data-copy-target]').forEach(button => {
+    button.addEventListener('click', () => {
+      let value = document.getElementById(button.dataset.copyTarget).value;
+      if (button.hasAttribute('data-markdown')) value = `![图片](<${value}>)`;
+      copyToClipboard(value, button, button.textContent);
+    });
+  });
 
   if (copyTextBtn) {
     copyTextBtn.addEventListener("click", () => {
       const decodeContent = decodeEntity(content)
-      copyToClipboard(decodeContent, copyTextBtn, "Copy Text");
+      copyToClipboard(decodeContent, copyTextBtn, "复制内容");
     })
   }
 

@@ -16,7 +16,7 @@
         {% if pasta.encrypt_server %}
         <span>{{ file.extension() }}</span>
         {% else %}
-        <span>LOCKED</span>
+        <span>已加密</span>
         {% endif %}
     </div>
 {% endif %}
@@ -29,13 +29,13 @@
   {% if !pasta.encrypt_client && pasta.encrypt_server %}
   <a href="#" class="download-link" data-filename="{{ file.name() }}" data-url="{{ args.public_path_as_str() }}/secure_file/{{pasta.id_as_animals()}}?fname={{ file.url_encoded_name() }}">
       <button class="download-button" style="margin-left: 0; padding: 4px 8px; font-size: small;">
-        Download
+        下载
       </button>
   </a>
   {% else if !pasta.encrypt_client && !pasta.encrypt_server %}
   <a href="{{ args.public_path_as_str() }}/file/{{pasta.id_as_animals()}}?fname={{ file.url_encoded_name() }}" class="download-link" download data-filename="{{ file.name() }}">
     <button class="download-button" style="margin-left: 0; padding: 4px 8px; font-size: small;">
-      Download
+      下载
     </button>
   </a>
   {% endif %}
