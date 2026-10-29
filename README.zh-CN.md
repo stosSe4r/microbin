@@ -31,6 +31,8 @@ sudo ./deploy.sh
 
 服务监听 HTTP `31245`，CDN 将 `https://b64.top` 回源到该端口。配置中的 `MICROBIN_PUBLIC_PATH` 应为访客访问的 HTTPS 域名；独立短域名可配置在 `MICROBIN_SHORT_PATH`，同样指向此服务。站点名称来自 `MICROBIN_TITLE`。
 
+同一端口支持 HTTP/1.1 和明文 HTTP/2（H2C prior knowledge），无需 SSL。可用 `curl --http2-prior-knowledge -sS -D - -o /dev/null http://源站:31245/` 验证；`curl --http2` 使用的 HTTP/1.1 Upgrade 方式不在支持范围内。EdgeOne 使用 HTTP 回源时可开启 HTTP/2 回源。
+
 `deploy.sh` 从当前源码构建 `microbin-local:latest`，然后替换同名容器。数据保存在当前目录的 `data/`，使用 JSON 存储。默认永久保存、无需登录、公开分享，单文件上限 2 GiB。容器随 Docker 自动启动。
 
 中文主题和交互已内置在 `templates/assets/theme.css`、`theme.js`，无需额外 Web 服务。主要上传、分享、列表和说明界面使用中文，部分原项目的管理与加密提示仍为英文；界面汉化脚本不会修改分享内容或文件名。需要自定义样式时仍可使用 `MICROBIN_CUSTOM_CSS`。
@@ -46,6 +48,8 @@ python3 tests/share_flow.py
 ```
 
 集成检查会在临时目录启动本地实例，覆盖文字、图片、普通文件、混合内容、多文件、网址、独立短域名、登录路由、原始内容和文件 Range 请求。
+
+检查也会通过支持 HTTP/2 的 `curl` 验证同端口 HTTP/1.1 与 H2C 响应。
 
 可选浏览器检查会验证实际上传、复制内容、二维码解码及手机布局：
 

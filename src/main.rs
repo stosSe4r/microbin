@@ -174,7 +174,7 @@ async fn main() -> std::io::Result<()> {
             )
             .default_service(web::route().to(errors::not_found))
     })
-    .bind((ARGS.bind, ARGS.port))?
+    .bind_auto_h2c((ARGS.bind, ARGS.port))?
     .workers(ARGS.threads as usize)
     .run()
     .await

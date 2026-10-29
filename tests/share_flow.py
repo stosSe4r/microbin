@@ -92,6 +92,13 @@ def server(**settings):
 
 def check():
     with server() as (base, directory):
+        for option, version in [('--http1.1', '1.1'), ('--http2-prior-knowledge', '2')]:
+            response = subprocess.check_output([
+                'curl', '--noproxy', '*', option, '--max-time', '10', '-fsS',
+                '-o', os.devnull, '-w', '%{http_version} %{http_code}', base,
+            ], text=True)
+            assert response == f'{version} 200', (option, response)
+        print('PASS: HTTP/1.1 and H2C on the same plaintext port')
         cases = [
             ('text', '原文 Copy ` ${value} <script> &', (), '/p/', ''),
             ('image', '', [('图片.png', PNG)], '/file/', '?preview=true'),
