@@ -13,6 +13,7 @@ const path = require('node:path');
     ...(process.env.CHROMIUM_PATH ? {executablePath: process.env.CHROMIUM_PATH} : {}),
     args: ['--no-sandbox'],
   });
+  const temporary = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'microbin-browser-'));
   try {
     const context = await browser.newContext({viewport: {width: 1280, height: 1000}, permissions: ['clipboard-read', 'clipboard-write']});
     const page = await context.newPage();
@@ -67,9 +68,79 @@ const path = require('node:path');
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), `${base}/${ids.url}`);
     await page.goto(`${base}/guide`, {waitUntil: 'networkidle'});
     assert((await page.locator('.help').innerText()).includes('结果页直接显示分享二维码'));
+    // More than 64 MiB in several files must use chunks, even if each file is small.
+    await page.goto(base, {waitUntil: 'networkidle'});
+    const MiB = 1024 * 1024;
+    const payloads = [Buffer.alloc(33 * MiB, 0x5a), Buffer.alloc(33 * MiB, 0x7b), Buffer.alloc(0)];
+    const names = ['分片一.bin', '分片二.bin', '空文件.bin'];
+    const paths = payloads.map((buffer, i) => { const target = path.join(temporary, names[i]); fs.writeFileSync(target, buffer); return target; });
+    await page.locator('#file').setInputFiles(paths);
+    const offsets = [];
+    let failures = 0;
+    let maximumBody = 0;
+    await page.route('**/upload/chunks/*/*', async route => {
+      if (route.request().method() !== 'PUT') return route.continue();
+      offsets.push(new URL(route.request().url()).pathname.split('/').pop());
+      maximumBody = Math.max(maximumBody, route.request().postDataBuffer().length);
+      if (failures++ === 0) return route.abort('failed');
+      if (failures === 2) {
+        await route.fetch(); // Server accepted the chunk; simulate losing its response.
+        return route.abort('failed');
+      }
+      return route.continue();
+    });
+    await Promise.all([page.waitForURL(/\/upload\//, {timeout: 60000}), page.locator('#submit-button').click()]);
+    assert.deepEqual(offsets.slice(0, 3), ['0', '0', '0']);
+    assert(maximumBody <= 16 * MiB);
+    const chunkedSlug = new URL(page.url()).pathname.split('/').pop();
+    const crypto = require('node:crypto');
+    const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
+    for (let i = 0; i < names.length; i++) {
+      const response = await context.request.get(`${base}/file/${chunkedSlug}?fname=${encodeURIComponent(names[i])}`);
+      assert.equal(response.status(), 200);
+      assert.equal(digest(await response.body()), digest(payloads[i]), names[i]);
+    }
+    await page.unroute('**/upload/chunks/*/*');
+    // A stalled chunk can be cancelled without leaving the submit button disabled.
+    await page.goto(base, {waitUntil: 'networkidle'});
+    const cancelledFile = path.join(temporary, '取消.bin');
+    const fd = fs.openSync(cancelledFile, 'w'); fs.ftruncateSync(fd, 65 * MiB); fs.closeSync(fd);
+    await page.locator('#file').setInputFiles(cancelledFile);
+    let stalled;
+    const pending = new Promise(resolve => { stalled = resolve; });
+    await page.route('**/upload/chunks/*/*', async route => { stalled(route); });
+    await page.locator('#submit-button').click();
+    const route = await pending;
+    assert(await page.locator('#upload-progress').isVisible());
+    await page.locator('#upload-cancel').click();
+    await page.waitForFunction(() => !document.getElementById('submit-button').disabled);
+    assert((await page.locator('#upload-status').innerText()).includes('已取消上传'));
+    assert(!await page.locator('#upload-cancel').isVisible());
+    await route.abort('aborted');
+    await page.unroute('**/upload/chunks/*/*');
+    await page.goto(base, {waitUntil: 'networkidle'});
+    await page.locator('#file').setInputFiles(cancelledFile);
+    let rejected = 0;
+    await page.route('**/upload/chunks/*/*', async route => {
+      rejected++;
+      await route.fulfill({status: 413, body: 'Too large'});
+    });
+    await page.locator('#submit-button').click();
+    await page.waitForFunction(() => !document.getElementById('submit-button').disabled && document.getElementById('upload-status').textContent.includes('大小限制'));
+    assert.equal(rejected, 1, 'Permanent HTTP errors must not retry');
+    await page.unroute('**/upload/chunks/*/*');
+    await page.goto(base, {waitUntil: 'networkidle'});
+    const oversized = path.join(temporary, '超限.bin');
+    const hugeFd = fs.openSync(oversized, 'w'); fs.ftruncateSync(hugeFd, 2048 * MiB + 1); fs.closeSync(hugeFd);
+    await page.locator('#file').setInputFiles([paths[2], oversized]);
+    await page.locator('#submit-button').click();
+    assert((await page.locator('#attach-file-button').innerText()).includes('超限.bin 超过单文件'));
+    assert(!await page.locator('#upload-progress').isVisible());
     assert.deepEqual(errors, []);
+    console.log('PASS: browser chunk selection, bounded requests, network retry, lost response, exact file hashes and cancellation');
     console.log('PASS: browser upload, Chinese content/filename, copy controls, inline/standalone QR decoding, mobile layout and guide');
   } finally {
     await browser.close();
+    fs.rmSync(temporary, {recursive: true, force: true});
   }
 })().catch(error => {console.error(error); process.exit(1);});

@@ -120,3 +120,8 @@ tbody tr:hover { background: #f8faff; }
   .link-row { gap: 6px; }
   .link-row button { padding: 9px 10px; font-size: 12px; }
 }
+
+.upload-feedback progress { width: 100%; margin-top: 14px; accent-color: #2563eb; }
+.upload-feedback p { font-size: 13px; color: var(--text-muted); overflow-wrap: anywhere; }
+.upload-feedback button { font-size: 13px; }
+[hidden] { display: none !important; }

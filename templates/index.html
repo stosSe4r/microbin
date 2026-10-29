@@ -276,6 +276,11 @@
         </div>
     </div>
 
+    <div class="upload-feedback">
+        <progress id="upload-progress" max="100" value="0" hidden aria-label="上传进度"></progress>
+        <p id="upload-status" role="status" aria-live="polite" hidden></p>
+        <button id="upload-cancel" type="button" hidden>取消上传</button>
+    </div>
     <input type="hidden" name="content" id="content">
     <input type="hidden" name="encrypt_client" id="encrypt_client">
     {% if args.encryption_server_side || args.enable_readonly %}
@@ -287,6 +292,7 @@
 <br>
 <br>
 <script type="text/javascript" src="{{ args.public_path_as_str() }}/static/jszip.min.js"></script>
+<script src="{{ args.public_path_as_str() }}/static/upload.js"></script>
 <script>
     const form = document.getElementById("pasta-form");
     const submitButton = document.getElementById("submit-button");
@@ -305,7 +311,9 @@
     const te = new TextEncoder();
 
     form.onsubmit = async function (event) {
-        event.preventDefault(); // prevent default form submission
+        event.preventDefault();
+        if (submitButton.disabled) return false;
+        try {
 
         // {% if !args.no_file_upload %}
             if (fileOversized()) return false;
@@ -364,41 +372,14 @@
             return false;
         }
 
-        let showProgress = false;
-
         submitButton.disabled = true;
         submitButton.value = 'Uploading...';
-
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '{{ args.public_path_as_str() }}/upload', true);
-
-        xhr.upload.onprogress = function (event) {
-            if (showProgress) {
-                const progressPercent = Math.round((event.loaded / event.total) * 100);
-                if (progressPercent === 100) {
-                    submitButton.value = 'Processing...';
-                } else {
-                    submitButton.value = `${progressPercent}%`;
-                }
-            }
-        };
-
-        xhr.onload = function () { // Use onload instead of onreadystatechange for cleaner status check
-             if (xhr.status === 200 || xhr.status === 302) {
-                window.location.href = xhr.responseURL;
-            } else {
-                submitButton.value = 'Failed';
-                submitButton.disabled = false;
-            }
-        };
-
-
-        const formData = new FormData(form);
-        xhr.send(formData);
-
-        showProgressTimeout = setTimeout(() => {
-            showProgress = true;
-        }, 1000);
+        window.location.href = await uploadShare(form, submitButton);
+        } catch (error) {
+            submitButton.value = '上传失败，请重试';
+        } finally {
+            submitButton.disabled = false;
+        }
     };
 
     function encryptWithPassword(password, plaintext) {
@@ -418,24 +399,12 @@
     }
 
     function fileOversized() {
-        if (hiddenFileButton.files.length > 0) {
-            const fileSize = hiddenFileButton.files.item(0).size;
-            const fileSizeMb = fileSize / 1024 ** 2;
-
-            if (privacyDropdown?.value == "secret") {
-                if (fileSizeMb >
-                    parseInt("{{ args.max_file_size_encrypted_mb }}")) {
-                    attachFileButton.textContent = "Please select a file smaller than {{ args.max_file_size_encrypted_mb }} MB";
-                    this.value = "";
-                    return true;
-                }
-            } else {
-                if (fileSizeMb >
-                    parseInt("{{ args.max_file_size_unencrypted_mb }}")) {
-                    attachFileButton.textContent = "Please select a file smaller than {{ args.max_file_size_unencrypted_mb }} MB";
-                    this.value = "";
-                    return true;
-                }
+        const encrypted = ['secret', 'private'].includes(privacyDropdown?.value);
+        const limit = encrypted ? Math.min({{ args.max_file_size_encrypted_mb }}, {{ args.max_file_size_unencrypted_mb }}) : {{ args.max_file_size_unencrypted_mb }};
+        for (const file of hiddenFileButton.files) {
+            if (file.size > limit * 1024 ** 2) {
+                attachFileButton.textContent = `${file.name} 超过单文件 ${limit} MiB 上限`;
+                return true;
             }
         }
         return false;

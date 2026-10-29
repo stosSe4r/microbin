@@ -3,7 +3,7 @@ use linkify::{LinkFinder, LinkKind};
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 use qrcode_generator::QrCodeEcc;
 use std::fs::{self, File};
-use std::io::{BufReader, Read, Write};
+use std::io::{BufReader, Read};
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -134,7 +134,7 @@ pub fn encrypt_file(
     input_file_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Read the input file into memory
-    let file = File::open(input_file_path).expect("Tried to encrypt non-existent file");
+    let file = File::open(input_file_path)?;
     let mut reader = BufReader::new(file);
     let mut input_data = Vec::new();
     reader.read_to_end(&mut input_data)?;
@@ -145,13 +145,8 @@ pub fn encrypt_file(
     // Encrypt the input data
     let ciphertext = mc.encrypt_bytes_to_bytes(&input_data[..]);
 
-    // Write the encrypted data to a new file with the .enc extension
-    let mut f = File::create(format!("{}.enc", input_file_path))?;
-    f.write_all(ciphertext.as_slice())?;
-
-    // Delete the original input file
-    // input_file.seek(SeekFrom::Start(0))?;
-    fs::remove_file(input_file_path)?;
+    // This is a temporary file; keep its RAII owner responsible for cleanup.
+    fs::write(input_file_path, ciphertext)?;
 
     Ok(())
 }

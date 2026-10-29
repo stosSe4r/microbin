@@ -112,6 +112,7 @@ pub fn is_valid_expiration(expiration: &str, max_expiry: &str) -> bool {
 pub async fn create(
     data: web::Data<AppState>,
     mut payload: Multipart,
+    chunks: web::Data<super::chunks::ChunkUploads>,
 ) -> Result<HttpResponse, Error> {
     let timenow: i64 = match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(n) => n.as_secs(),
@@ -141,6 +142,7 @@ pub async fn create(
         attachments: None,
     };
 
+    let mut staged_files = Vec::<(PastaFile, tempfile::NamedTempFile)>::new();
     let mut random_key: String = String::from("");
     let mut plain_key: String = String::from("");
     let mut uploader_password = String::from("");
@@ -272,25 +274,8 @@ pub async fn create(
                     }
                 };
 
-                if let Err(e) = std::fs::create_dir_all(format!(
-                    "{}/attachments/{}",
-                    ARGS.data_dir,
-                    &new_pasta.id_as_animals()
-                )) {
-                    log::error!("Failed to create directory: {}", e);
-                    return Err(actix_web::error::ErrorInternalServerError(
-                        "Failed to create attachment directory",
-                    ));
-                }
-
-                let filepath = format!(
-                    "{}/attachments/{}/{}",
-                    ARGS.data_dir,
-                    &new_pasta.id_as_animals(),
-                    &file.name()
-                );
-
-                let mut f = web::block(|| std::fs::File::create(filepath)).await??;
+                let chunks = chunks.clone();
+                let mut f = web::block(move || chunks.temporary()).await??;
                 let mut size = 0;
                 while let Some(chunk) = field.try_next().await? {
                     size += chunk.len();
@@ -298,23 +283,30 @@ pub async fn create(
                         && size > ARGS.max_file_size_encrypted_mb * 1024 * 1024)
                         || size > ARGS.max_file_size_unencrypted_mb * 1024 * 1024
                     {
-                        return Err(ErrorBadRequest("File exceeded size limit."));
+                        return Err(actix_web::error::ErrorPayloadTooLarge("文件超过站点大小限制"));
                     }
                     f = web::block(move || f.write_all(&chunk).map(|_| f)).await??;
                 }
 
                 file.size = ByteSize::b(size as u64);
-
-                if new_pasta.file.is_none() {
-                    new_pasta.file = Some(file);
-                } else {
-                    if new_pasta.attachments.is_none() {
-                        new_pasta.attachments = Some(Vec::new());
-                    }
-                    new_pasta.attachments.as_mut().unwrap().push(file);
+                staged_files.push((file, f));
+            }
+            "file_token" => {
+                if ARGS.no_file_upload {
+                    return Err(ErrorBadRequest("本站未启用文件上传"));
                 }
-                
-                new_pasta.pasta_type = String::from("text");
+                let mut token = Vec::new();
+                while let Some(chunk) = field.try_next().await? {
+                    if token.len() + chunk.len() > 32 {
+                        return Err(ErrorBadRequest("分片编号无效"));
+                    }
+                    token.extend_from_slice(&chunk);
+                }
+                let token = String::from_utf8(token).map_err(|_| ErrorBadRequest("分片编号无效"))?;
+                let chunks = chunks.clone();
+                let staged = web::block(move || chunks.take(&token)).await?
+                    .map_err(ErrorBadRequest)?;
+                staged_files.push(staged);
             }
             field => {
                 log::error!("Unexpected multipart field:  {}", field);
@@ -331,6 +323,11 @@ pub async fn create(
         }
     }
 
+    let mut names = std::collections::HashSet::new();
+    if staged_files.iter().any(|(file, _)| !names.insert(file.name())) {
+        return Err(ErrorBadRequest("有重名文件，请重命名后重新上传"));
+    }
+
     let id = new_pasta.id;
 
     if plain_key != *"" && new_pasta.readonly {
@@ -345,43 +342,46 @@ pub async fn create(
         }
     }
 
-    if new_pasta.encrypt_server && !new_pasta.readonly {
-        let mut files_to_encrypt: Vec<&PastaFile> = Vec::new();
-        if let Some(file) = &new_pasta.file {
-            files_to_encrypt.push(file);
+    for (file, staged) in &staged_files {
+        let limit = if new_pasta.encrypt_server {
+            ARGS.max_file_size_encrypted_mb.min(ARGS.max_file_size_unencrypted_mb)
+        } else {
+            ARGS.max_file_size_unencrypted_mb
+        };
+        if file.size.as_u64() > limit as u64 * 1024 * 1024 {
+            return Err(actix_web::error::ErrorPayloadTooLarge("文件超过站点大小限制"));
         }
-        if let Some(attachments) = &new_pasta.attachments {
-            for attachment in attachments {
-                files_to_encrypt.push(attachment);
-            }
-        }
-
-        for file in files_to_encrypt {
-             let filepath = format!(
-                "{}/attachments/{}/{}",
-                ARGS.data_dir,
-                &new_pasta.id_as_animals(),
-                &file.name()
-            );
-            if new_pasta.encrypt_client {
-                encrypt_file(&random_key, &filepath).expect("Failed to encrypt file with random key")
-            } else {
-                encrypt_file(&plain_key, &filepath).expect("Failed to encrypt file with plain key")
-            }
+        if new_pasta.encrypt_server && !new_pasta.readonly {
+            let key = if new_pasta.encrypt_client { &random_key } else { &plain_key };
+            encrypt_file(key, staged.path().to_str().unwrap())
+                .map_err(actix_web::error::ErrorInternalServerError)?;
         }
     }
 
     let encrypt_server = new_pasta.encrypt_server;
-
     {
         let mut pastas = data.pastas.lock().unwrap();
-        pastas.push(new_pasta);
-
-        for (_, pasta) in pastas.iter().enumerate() {
-            if pasta.id == id {
-                insert(Some(&pastas), Some(pasta));
-            }
+        if pastas.iter().any(|p| p.id == id) {
+            return Err(actix_web::error::ErrorConflict("分享编号碰巧重复，请重试"));
         }
+        // Publish only complete files, while GC cannot mistake them for orphan uploads.
+        let directory = format!("{}/attachments/{}", ARGS.data_dir, new_pasta.id_as_animals());
+        if !staged_files.is_empty() {
+            std::fs::create_dir_all(&directory)?;
+        }
+        for (file, staged) in staged_files {
+            let suffix = if new_pasta.encrypt_server && !new_pasta.readonly { ".enc" } else { "" };
+            staged.persist(format!("{}/{}{}", directory, file.name(), suffix))
+                .map_err(actix_web::error::ErrorInternalServerError)?;
+            if new_pasta.file.is_none() {
+                new_pasta.file = Some(file);
+            } else {
+                new_pasta.attachments.get_or_insert_with(Vec::new).push(file);
+            }
+            new_pasta.pasta_type = String::from("text");
+        }
+        pastas.push(new_pasta);
+        insert(Some(&pastas), pastas.last());
     }
 
     let slug = if ARGS.hash_ids {

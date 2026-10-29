@@ -3,6 +3,7 @@
 import base64
 import contextlib
 import html
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,19 +27,19 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 OPENER = urllib.request.build_opener(NoRedirect)
 
-
-def request(url, data=None, headers=None):
+def request(url, data=None, headers=None, method=None):
     try:
-        response = OPENER.open(urllib.request.Request(url, data=data, headers=headers or {}), timeout=10)
+        response = OPENER.open(urllib.request.Request(url, data=data, headers=headers or {}, method=method), timeout=20)
     except urllib.error.HTTPError as error:
         response = error
     with response:
         return response.status, response.headers, response.read()
 
-
-def upload(base, content='', files=(), privacy='public', auth=None):
+def upload(base, content='', files=(), privacy='public', auth=None, tokens=(), extra=()):
     boundary = 'microbin-share-flow-check'
     fields = [('expiration', '1hour'), ('privacy', privacy), ('burn_after', '0'), ('content', content)]
+    fields.extend(extra)
+    fields.extend(('file_token', token) for token in tokens)
     body = bytearray()
     for name, value in fields:
         body.extend(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
@@ -51,7 +52,8 @@ def upload(base, content='', files=(), privacy='public', auth=None):
         headers['Authorization'] = auth
     status, headers, _ = request(base + '/upload', bytes(body), headers)
     assert status == 302, (status, headers)
-    return headers['Location'].rsplit('/', 1)[-1]
+    location = headers['Location']
+    return location.split('/')[-2] if '/auth/' in location else location.rsplit('/', 1)[-1]
 
 
 @contextlib.contextmanager
@@ -90,6 +92,81 @@ def server(**settings):
                 process.wait(timeout=10)
 
 
+def start_chunk(base, name, size):
+    status, _, body = request(base + '/upload/chunks/start', json.dumps({'name': name, 'size': size}).encode(), {'Content-Type': 'application/json'})
+    assert status == 200, (status, body)
+    return json.loads(body)['id']
+
+def check_chunks(base, directory):
+    chunks = base + '/upload/chunks/'
+    token = start_chunk(base, '中文图片.png', len(PNG))
+    first = PNG[:30]
+    assert request(f'{chunks}{token}/1', first, method='PUT')[0] == 400
+    for _ in range(2):  # Lost response: sending the same chunk twice is safe.
+        status, _, body = request(f'{chunks}{token}/0', first, method='PUT')
+        assert status == 200 and json.loads(body)['received'] == 30
+    # Publishing an incomplete token fails without consuming the staging file.
+    boundary = 'check-incomplete'
+    body = f'--{boundary}\r\nContent-Disposition: form-data; name="file_token"\r\n\r\n{token}\r\n--{boundary}--\r\n'.encode()
+    assert request(base + '/upload', body, {'Content-Type': f'multipart/form-data; boundary={boundary}'})[0] == 400
+    request(base + '/list')  # GC must not remove staging files.
+    assert request(f'{chunks}{token}/30', PNG[30:] + b'extra', method='PUT')[0] == 400
+    assert request(f'{chunks}{token}/30', PNG[30:], method='PUT')[0] == 200
+    slug = upload(base, '分片图片说明', [('second.bin', b'second')], tokens=[token])
+    assert request(f'{base}/file/{slug}?preview=true')[2] == PNG
+    assert request(f'{base}/raw/{slug}')[2].decode() == '分片图片说明'
+    page = request(f'{base}/upload/{slug}')[2].decode()
+    assert '中文图片.png' in page and 'second.bin' in page and '<svg' in page
+    assert request(f'{chunks}{token}/0', first, method='PUT')[0] == 400, 'Tokens are consumed once'
+    assert not list((directory / 'pasta_data/.uploads').iterdir())
+    token = start_chunk(base, 'empty.bin', 0)
+    slug = upload(base, tokens=[token])
+    assert request(f'{base}/file/{slug}')[2] == b''
+    token = start_chunk(base, 'cancel.bin', 20 * 1024 * 1024)
+    oversized = subprocess.run(['curl', '--noproxy', '*', '-sS', '--max-time', '10', '-X', 'PUT',
+        '-H', 'Expect: 100-continue', '--data-binary', '@-', '-o', os.devnull, '-w', '%{http_code}',
+        f'{chunks}{token}/0'], input=b'x' * (16 * 1024 * 1024 + 1), capture_output=True, check=True)
+    assert oversized.stdout == b'413', oversized
+    assert request(f'{chunks}{token}', method='DELETE')[0] == 204
+    assert request(f'{chunks}{token}', method='DELETE')[0] == 204
+    assert request(f'{chunks}{token}/0', b'x', method='PUT')[0] == 400
+    assert not list((directory / 'pasta_data/.uploads').iterdir())
+    # File encryption retains its on-disk .enc name and original download bytes.
+    for chunked in [False, True]:
+        token = start_chunk(base, 'private.bin', len(PNG)) if chunked else None
+        if token:
+            assert request(f'{chunks}{token}/0', PNG, method='PUT')[0] == 200
+        slug = upload(base, privacy='private', files=() if token else [('private.bin', PNG)],
+                      tokens=[token] if token else (), extra=[('plain_key', 'example-password')])
+        boundary = 'private-download'
+        body = f'--{boundary}\r\nContent-Disposition: form-data; name="password"\r\n\r\nexample-password\r\n--{boundary}--\r\n'.encode()
+        status, _, result = request(f'{base}/secure_file/{slug}', body, {'Content-Type': f'multipart/form-data; boundary={boundary}'})
+        assert status == 200 and result == PNG, (status, result)
+    print('PASS: direct and chunked uploads preserve encrypted file downloads')
+    print('PASS: chunk retries, offsets, incomplete/consumed tokens, mixed files, GC, empty files, cancellation and chunk limits')
+
+
+def check_large_chunk_upload(base):
+    size = 801 * 1024 * 1024
+    token = start_chunk(base, 'over-cdn-limit.bin', size)
+    expected = hashlib.sha256()
+    block = bytes(range(256)) * (16 * 1024 * 1024 // 256)
+    for offset in range(0, size, len(block)):
+        part = block[:min(len(block), size - offset)]
+        status, _, body = request(f'{base}/upload/chunks/{token}/{offset}', part, method='PUT')
+        assert status == 200 and json.loads(body)['received'] == offset + len(part)
+        expected.update(part)
+    slug = upload(base, tokens=[token])
+    actual = hashlib.sha256()
+    downloaded = 0
+    with urllib.request.urlopen(f'{base}/file/{slug}', timeout=30) as response:
+        while part := response.read(1024 * 1024):
+            downloaded += len(part)
+            actual.update(part)
+    assert downloaded == size and actual.digest() == expected.digest()
+    request(f'{base}/remove/{slug}')
+    print('PASS: actual 801 MiB upload and streaming download SHA-256 match')
+
 def check():
     with server() as (base, directory):
         for option, version in [('--http1.1', '1.1'), ('--http2-prior-knowledge', '2')]:
@@ -99,6 +176,9 @@ def check():
             ], text=True)
             assert response == f'{version} 200', (option, response)
         print('PASS: HTTP/1.1 and H2C on the same plaintext port')
+        check_chunks(base, directory)
+        if '--large-upload' in sys.argv:
+            check_large_chunk_upload(base)
         cases = [
             ('text', '原文 Copy ` ${value} <script> &', (), '/p/', ''),
             ('image', '', [('图片.png', PNG)], '/file/', '?preview=true'),
@@ -158,10 +238,21 @@ def check():
         assert request(base + '/list')[0] == 401
         assert request(base + '/incorrect')[0] == 401
         assert request(base + '/upload', b'')[0] == 401
+        assert request(base + '/upload/chunks/start', b'{}', {'Content-Type': 'application/json'})[0] == 401
         status, headers, _ = request(f'{base}/{slug}')
         assert status == 302 and headers['Location'] == f'{base}/p/{slug}'
         assert f'value="https://s.example/{slug}"'.encode() in request(f'{base}/p/{slug}')[2]
         print('PASS: separate short domain and protected route precedence')
+    with server(MICROBIN_NO_FILE_UPLOAD='true') as (base, _):
+        assert request(base + '/upload/chunks/start', b'{"name":"a.bin","size":1}', {'Content-Type': 'application/json'})[0] == 403
+    with server(MICROBIN_MAX_FILE_SIZE_UNENCRYPTED_MB='1') as (base, _):
+        assert request(base + '/upload/chunks/start', b'{"name":"a.bin","size":1048577}', {'Content-Type': 'application/json'})[0] == 413
+        token = start_chunk(base, 'limit.bin', 1048576)
+        assert request(f'{base}/upload/chunks/{token}/0', b'x' * 1048577, method='PUT')[0] == 400
+        assert request(f'{base}/upload/chunks/{token}/0', b'x' * 1048576, method='PUT')[0] == 200
+        slug = upload(base, tokens=[token])
+        assert len(request(f'{base}/file/{slug}')[2]) == 1048576
+        print('PASS: chunk uploads obey file-upload toggle and site size limits')
     with server(MICROBIN_HASH_IDS='false', MICROBIN_PUBLIC_PATH='') as (base, _):
         slug = upload(base, 'animal identifier')
         status, headers, _ = request(f'{base}/{slug}')

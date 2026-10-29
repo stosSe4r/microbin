@@ -42,6 +42,7 @@ pub mod endpoints {
     pub mod auth_admin;
     pub mod auth_upload;
     pub mod create;
+    pub mod chunks;
     pub mod edit;
     pub mod errors;
     pub mod file;
@@ -97,6 +98,16 @@ async fn main() -> std::io::Result<()> {
         pastas: Mutex::new(read_all()),
     });
 
+    let chunks = web::Data::new(endpoints::chunks::ChunkUploads::new()?);
+    let cleanup = chunks.clone();
+    actix_web::rt::spawn(async move {
+        loop {
+            actix_web::rt::time::sleep(std::time::Duration::from_secs(600)).await;
+            let data = cleanup.clone();
+            let _ = web::block(move || data.cleanup()).await;
+        }
+    });
+
     if !ARGS.disable_telemetry {
         start_telemetry_thread();
     }
@@ -104,6 +115,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(data.clone())
+            .app_data(chunks.clone())
             .wrap(middleware::NormalizePath::trim())
             .wrap(
                 middleware::Logger::new(r#"%{r}a "%r" %s %b "%{Referer}i" "%{User-Agent}i" %T"#)
@@ -155,6 +167,11 @@ async fn main() -> std::io::Result<()> {
                             && ARGS.auth_basic_username.as_ref().unwrap().trim() != "",
                         HttpAuthentication::basic(util::auth::auth_validator),
                     ))
+                    .service(web::scope("/upload/chunks")
+                        .app_data(web::PayloadConfig::new(endpoints::chunks::CHUNK_SIZE))
+                        .route("/start", web::post().to(endpoints::chunks::start))
+                        .route("/{id}", web::delete().to(endpoints::chunks::cancel))
+                        .route("/{id}/{offset}", web::put().to(endpoints::chunks::append)))
                     .service(create::index)
                     .service(auth_admin::auth_admin)
                     .service(auth_admin::auth_admin)
