@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -66,7 +67,7 @@ def server(**settings):
         env = {key: value for key, value in os.environ.items() if not key.startswith('MICROBIN_')}
         env.update({
             'MICROBIN_PORT': str(port), 'MICROBIN_BIND': '127.0.0.1',
-            'MICROBIN_JSON_DB': 'true', 'MICROBIN_DATA_DIR': 'pasta_data',
+            'MICROBIN_JSON_DB': 'false' if '--sqlite' in sys.argv else 'true', 'MICROBIN_DATA_DIR': 'pasta_data',
             'MICROBIN_QR': 'true', 'MICROBIN_HASH_IDS': 'true',
             'MICROBIN_PUBLIC_PATH': base, 'MICROBIN_ETERNAL_PASTA': 'true',
             'MICROBIN_DISABLE_TELEMETRY': 'true', 'MICROBIN_DISABLE_UPDATE_CHECKING': 'true',
@@ -167,6 +168,13 @@ def check_large_chunk_upload(base):
     request(f'{base}/remove/{slug}')
     print('PASS: actual 801 MiB upload and streaming download SHA-256 match')
 
+def persisted_read_count(directory, prefix):
+    if '--sqlite' in sys.argv:
+        with sqlite3.connect(directory / 'pasta_data/database.sqlite') as conn:
+            return conn.execute('SELECT read_count FROM pasta WHERE content LIKE ?', (prefix + '%',)).fetchone()[0]
+    return next(p['read_count'] for p in json.loads((directory / 'pasta_data/database.json').read_text()) if p['content'].startswith(prefix))
+
+
 def check():
     with server() as (base, directory):
         for option, version in [('--http1.1', '1.1'), ('--http2-prior-knowledge', '2')]:
@@ -212,9 +220,9 @@ def check():
         assert status == 302 and headers['Location'] == 'https://example.com/path?q=1'
         # A short redirect does not consume a read; the destination page counts it once.
         slug = ids['text']
-        before = next(p['read_count'] for p in json.loads((directory / 'pasta_data/database.json').read_text()) if p['content'].startswith('原文'))
+        before = persisted_read_count(directory, '原文')
         request(f'{base}/{slug}')
-        after = next(p['read_count'] for p in json.loads((directory / 'pasta_data/database.json').read_text()) if p['content'].startswith('原文'))
+        after = persisted_read_count(directory, '原文')
         assert before == after
         assert request(base + '/not-an-upload')[0] == 404
         assert request(base + '/static/theme.css')[0] == 200

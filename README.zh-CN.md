@@ -41,7 +41,7 @@ sudo ./deploy.sh
 
 同一端口支持 HTTP/1.1 和明文 HTTP/2（H2C prior knowledge），无需 SSL。可用 `curl --http2-prior-knowledge -sS -D - -o /dev/null http://源站:31245/` 验证；`curl --http2` 使用的 HTTP/1.1 Upgrade 方式不在支持范围内。EdgeOne 使用 HTTP 回源时可开启 HTTP/2 回源。
 
-`deploy.sh` 从当前源码构建 `microbin-local:latest`，然后替换同名容器。数据保存在当前目录的 `data/`，使用 JSON 存储。默认永久保存、无需登录、公开分享，单文件上限 2 GiB。容器随 Docker 自动启动。
+`deploy.sh` 从当前源码构建 `microbin-local:latest`，然后替换同名容器。数据保存在当前目录的 `data/`，使用 SQLite 存储（`data/database.sqlite`），重建容器或重启后仍保留。`MICROBIN_JSON_DB=true` 可选择 JSON；切换存储不会自动迁移旧数据。默认永久保存、无需登录、公开分享，单文件上限 2 GiB。容器随 Docker 自动启动。
 
 中文主题和交互已内置在 `templates/assets/theme.css`、`theme.js`，无需额外 Web 服务。主要上传、分享、列表和说明界面使用中文，部分原项目的管理与加密提示仍为英文；界面汉化脚本不会修改分享内容或文件名。需要自定义样式时仍可使用 `MICROBIN_CUSTOM_CSS`。
 
@@ -52,10 +52,13 @@ sudo ./deploy.sh
 ```sh
 cargo build --locked
 cargo test --locked
-python3 tests/share_flow.py
+python3 tests/share_flow.py --sqlite
+python3 tests/sqlite_persistence.py
 ```
 
-集成检查会在临时目录启动本地实例，覆盖文字、图片、普通文件、混合内容、多文件、网址、独立短域名、登录路由、原始内容和文件 Range 请求。
+`sqlite_persistence.py` 在独立临时目录使用 SQLite，覆盖两次强制结束进程后的重启、短链接跳转、附件、零字节文件、编辑和删除；不读取线上数据。
+
+`share_flow.py --sqlite` 使用 SQLite；不传 `--sqlite` 则验证 JSON 存储。集成检查会在临时目录启动本地实例，覆盖文字、图片、普通文件、混合内容、多文件、网址、独立短域名、登录路由、原始内容和文件 Range 请求。
 
 检查也会通过支持 HTTP/2 的 `curl` 验证同端口 HTTP/1.1 与 H2C 响应，检查分片重复提交、顺序和大小校验、取消与临时文件清理。加 `--large-upload` 可实际上传 801 MiB 并校验下载文件的 SHA-256（需约 1 GiB 临时磁盘空间）。
 
