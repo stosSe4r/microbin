@@ -91,9 +91,13 @@
                         href="{{ args.public_path_as_str()}}/upload/{{pasta.id_as_animals()}}">{{pasta.id_as_animals()}}</a>
                 </td>
                 <td>
-                    {{pasta.created_as_string()}}
+                    <time data-unix="{{ pasta.created }}">{{ pasta.created_as_string() }}</time>
                     →
-                    {{pasta.expiration_as_string()}}
+                    {% if pasta.expiration == 0 %}
+                        永久
+                        {%- else %}
+                        <time data-unix="{{ pasta.expiration }}">{{ pasta.expiration_as_string() }}</time>
+                        {%- endif %}
                 </td>
                 <td>
                     {{pasta.total_size_as_string()}}
@@ -201,9 +205,13 @@
                             href="{{ args.public_path_as_str()}}/upload/{{pasta.id_as_animals()}}">{{pasta.id_as_animals()}}</a>
                     </td>
                     <td>
-                        {{pasta.created_as_string()}}
+                        <time data-unix="{{ pasta.created }}">{{ pasta.created_as_string() }}</time>
                         →
-                        {{pasta.expiration_as_string()}}
+                        {% if pasta.expiration == 0 %}
+                        永久
+                        {%- else %}
+                        <time data-unix="{{ pasta.expiration }}">{{ pasta.expiration_as_string() }}</time>
+                        {%- endif %}
                     </td>
                     <td>
                         {% if pasta.encrypt_client %}

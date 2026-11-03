@@ -1,6 +1,18 @@
 (() => {
   'use strict';
   document.documentElement.lang = 'zh-CN';
+  const localTime = new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  });
+  const timezone = localTime.resolvedOptions().timeZone;
+  document.querySelectorAll('time[data-unix]').forEach(time => {
+    const date = new Date(Number(time.dataset.unix) * 1000);
+    if (Number.isNaN(date.getTime())) return;
+    const parts = Object.fromEntries(localTime.formatToParts(date).map(part => [part.type, part.value]));
+    time.textContent = `${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+    time.dateTime = date.toISOString();
+    time.title = `${date.toLocaleString('zh-CN', {timeZoneName: 'short'})} · ${timezone}`;
+  });
   const words = {
     'New': '新建', 'List': '全部分享', 'Guide': '使用说明',
     'Expiration': '保存时间', 'Burn After': '阅后即焚', 'Syntax': '代码高亮', 'Privacy': '可见范围', 'Password': '访问密码',

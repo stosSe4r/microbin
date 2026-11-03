@@ -1,5 +1,5 @@
 use bytesize::ByteSize;
-use chrono::{Datelike, Local, TimeZone, Timelike};
+use chrono::{Datelike, TimeZone, Timelike, Utc};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -159,9 +159,9 @@ impl Pasta {
     }
 
     pub fn created_as_string(&self) -> String {
-        Local.timestamp_opt(self.created, 0).map(|date| {
+        Utc.timestamp_opt(self.created, 0).map(|date| {
             format!(
-                "{:02}-{:02} {:02}:{:02}",
+                "{:02}-{:02} {:02}:{:02} UTC",
                 date.month(),
                 date.day(),
                 date.hour(),
@@ -177,9 +177,9 @@ impl Pasta {
         if self.expiration == 0 {
             String::from("Never")
         } else {
-            Local.timestamp_opt(self.expiration, 0).map(|date| {
+            Utc.timestamp_opt(self.expiration, 0).map(|date| {
                 format!(
-                    "{:02}-{:02} {:02}:{:02}",
+                    "{:02}-{:02} {:02}:{:02} UTC",
                     date.month(),
                     date.day(),
                     date.hour(),

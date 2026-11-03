@@ -19,6 +19,8 @@
 
 「管理页面」是操作入口，和预览页沿用相同的访问规则，并非独立的私密权限。公开、仅链接可见的可编辑内容，知道链接的人仍然可以操作。二维码需设置 `MICROBIN_QR=true`，并配置完整的公开域名或短域名。
 
+列表和管理页面的创建、到期时间按浏览器所在时区显示，悬停可查看完整日期和时区。数据库仍保存 Unix 时间戳；未启用 JavaScript 时明确显示 UTC 时间。永久保存不会显示为日期。
+
 ## 大文件上传
 
 浏览器选择的文件合计超过 64 MiB 时，自动按文件顺序以 16 MiB 分片上传，最后沿用原有表单创建同一个分享。小文件仍直接上传。EdgeOne 的 800 MB 限制针对单个请求，因此多个文件合计超限也需要分片；分片不会提高站点配置的单文件上限（默认 2 GiB）。
@@ -68,6 +70,7 @@ python3 tests/sqlite_persistence.py
 npm install --no-save --package-lock=false playwright jsqr pngjs
 npx playwright install chromium
 python3 tests/share_flow.py --browser
+node tests/timezone.cjs
 ```
 
 可用 `CHROMIUM_PATH` 指定已有 Chromium，`SCREENSHOT_DIR` 保存预览截图，`MICROBIN_BINARY` 指定待验证的可执行文件。

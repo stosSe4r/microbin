@@ -48,10 +48,14 @@
                         <button type="button" class="copy-button" data-url="{{ pasta.share_url() }}">Copy</button>
                     </td>
                     <td>
-                        {{pasta.created_as_string()}}
+                        <time data-unix="{{ pasta.created }}">{{ pasta.created_as_string() }}</time>
                     </td>
                     <td>
-                        {{pasta.expiration_as_string()}}
+                        {% if pasta.expiration == 0 %}
+                        永久
+                        {%- else %}
+                        <time data-unix="{{ pasta.expiration }}">{{ pasta.expiration_as_string() }}</time>
+                        {%- endif %}
                     </td>
                     <td>
                         {% if pasta.content != "" %}
@@ -130,10 +134,14 @@
                         <button type="button" class="copy-button" data-url="{{ pasta.share_url() }}">Copy</button>
                     </td>
                     <td>
-                        {{pasta.created_as_string()}}
+                        <time data-unix="{{ pasta.created }}">{{ pasta.created_as_string() }}</time>
                     </td>
                     <td>
-                        {{pasta.expiration_as_string()}}
+                        {% if pasta.expiration == 0 %}
+                        永久
+                        {%- else %}
+                        <time data-unix="{{ pasta.expiration }}">{{ pasta.expiration_as_string() }}</time>
+                        {%- endif %}
                     </td>
                     <td>
                         <a style="margin-right:1rem"

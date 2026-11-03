@@ -15,7 +15,7 @@ const path = require('node:path');
   });
   const temporary = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'microbin-browser-'));
   try {
-    const context = await browser.newContext({viewport: {width: 1280, height: 1000}, permissions: ['clipboard-read', 'clipboard-write']});
+    const context = await browser.newContext({timezoneId: 'Asia/Shanghai', viewport: {width: 1280, height: 1000}, permissions: ['clipboard-read', 'clipboard-write']});
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -63,6 +63,21 @@ const path = require('node:path');
     assert.equal(await page.locator('#content').inputValue(), original);
     assert.equal(await page.locator('#submit-button').inputValue(), '保存修改');
     await page.goto(`${base}/list`, {waitUntil: 'networkidle'});
+    const times = await page.locator('time[data-unix]').evaluateAll(elements => elements.map(time => {
+      const date = new Date(Number(time.dataset.unix) * 1000);
+      const pad = value => String(value).padStart(2, '0');
+      return {
+        actual: time.textContent,
+        expected: `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`,
+        iso: time.dateTime, expectedIso: date.toISOString(), title: time.title,
+      };
+    }));
+    assert(times.length > 0);
+    for (const time of times) {
+      assert.equal(time.actual, time.expected);
+      assert.equal(time.iso, time.expectedIso);
+      assert(time.title.includes('Asia/Shanghai'));
+    }
     await page.locator(`.copy-button[data-url="${base}/${ids.url}"]`).click();
     await page.waitForTimeout(100);
     assert.equal(await page.evaluate(() => navigator.clipboard.readText()), `${base}/${ids.url}`);
