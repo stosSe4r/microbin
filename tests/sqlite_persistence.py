@@ -13,7 +13,7 @@ from share_flow import BINARY, PNG, request, start_chunk, upload
 
 
 @contextlib.contextmanager
-def running(directory, base, port):
+def running(directory, base, port, **settings):
     env = {key: value for key, value in os.environ.items() if not key.startswith('MICROBIN_')}
     env.update({
         'MICROBIN_BIND': '127.0.0.1', 'MICROBIN_PORT': str(port),
@@ -24,6 +24,7 @@ def running(directory, base, port):
         'MICROBIN_DISABLE_TELEMETRY': 'true', 'MICROBIN_DISABLE_UPDATE_CHECKING': 'true',
         'MICROBIN_ADMIN_USERNAME': '', 'MICROBIN_ADMIN_PASSWORD': '',
     })
+    env.update(settings)
     with open(directory / 'server.log', 'ab') as log:
         process = subprocess.Popen([str(BINARY)], cwd=directory, env=env, stdout=log, stderr=log)
         try:

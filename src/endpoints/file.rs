@@ -3,10 +3,10 @@ use std::path::PathBuf;
 
 use crate::args::ARGS;
 use crate::util::auth;
-use crate::util::hashids::to_u64 as hashid_to_u64;
 use crate::util::misc::remove_expired;
-use crate::util::{animalnumbers::to_u64, misc::decrypt_file};
+use crate::util::misc::decrypt_file;
 use crate::AppState;
+use crate::util::shortlinks::resolve_id;
 use actix_multipart::Multipart;
 use actix_web::http::header;
 use actix_web::{get, post, web, Error, HttpResponse};
@@ -23,11 +23,7 @@ pub async fn post_secure_file(
     // get access to the pasta collection
     let mut pastas = data.pastas.lock().unwrap();
 
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
+    let id = resolve_id(&id, &pastas);
 
     // remove expired pastas (including this one if needed)
     remove_expired(&mut pastas);
@@ -128,11 +124,7 @@ pub async fn get_file(
     // get access to the pasta collection
     let mut pastas = data.pastas.lock().unwrap();
 
-    let id_intern = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
+    let id_intern = resolve_id(&id, &pastas);
 
     // remove expired pastas (including this one if needed)
     remove_expired(&mut pastas);

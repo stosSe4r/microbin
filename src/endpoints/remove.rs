@@ -4,12 +4,11 @@ use actix_web::{get, post, web, Error, HttpResponse};
 use crate::args::ARGS;
 use crate::endpoints::errors::ErrorTemplate;
 
-use crate::util::animalnumbers::to_u64;
 use crate::util::auth;
 use crate::util::db::delete;
-use crate::util::hashids::to_u64 as hashid_to_u64;
 use crate::util::misc::{decrypt, remove_expired};
 use crate::AppState;
+use crate::util::shortlinks::resolve_id;
 use askama::Template;
 use std::fs;
 
@@ -17,11 +16,7 @@ use std::fs;
 pub async fn remove(data: web::Data<AppState>, id: web::Path<String>) -> HttpResponse {
     let mut pastas = data.pastas.lock().unwrap();
 
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
+    let id = resolve_id(&id, &pastas);
 
     for (i, pasta) in pastas.iter().enumerate() {
         if pasta.id == id {
@@ -71,13 +66,9 @@ pub async fn post_remove(
     id: web::Path<String>,
     payload: Multipart,
 ) -> Result<HttpResponse, Error> {
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
-
     let mut pastas = data.pastas.lock().unwrap();
+
+    let id = resolve_id(&id, &pastas);
 
     remove_expired(&mut pastas);
 
@@ -168,4 +159,37 @@ pub async fn post_remove(
     Ok(HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
         .body(ErrorTemplate { args: &ARGS }.render().unwrap()))
+}
+
+#[derive(serde::Deserialize)]
+pub struct BatchRemove {
+    slugs: Vec<String>,
+}
+
+pub async fn batch_remove(data: web::Data<AppState>, input: web::Json<BatchRemove>) -> Result<HttpResponse, Error> {
+    if ARGS.no_listing { return Err(actix_web::error::ErrorForbidden("本站未启用列表管理")); }
+    if input.slugs.is_empty() { return Err(actix_web::error::ErrorBadRequest("请先选择分享")); }
+    let selected: std::collections::HashSet<_> = input.slugs.iter().collect();
+    let mut pastas = data.pastas.lock().unwrap();
+    let mut directories = Vec::new();
+    // Validate the complete selection before changing any data.
+    for slug in &selected {
+        let pasta = pastas.iter().find(|p| p.id_as_animals() == slug.as_str())
+            .ok_or_else(|| actix_web::error::ErrorConflict("部分分享已删除或过期，请刷新列表"))?;
+        if pasta.private || !pasta.editable || pasta.readonly || pasta.encrypt_server {
+            return Err(actix_web::error::ErrorForbidden("所选分享中有受保护内容，请通过单条管理验证密码"));
+        }
+        directories.push(format!("{}/attachments/{}", ARGS.data_dir, pasta.id_as_animals()));
+    }
+    pastas.retain(|p| !selected.contains(&p.id_as_animals()));
+    crate::util::db::update_all(&pastas);
+    for directory in directories {
+        if let Err(error) = fs::remove_dir_all(&directory) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                log::error!("Failed to clean deleted share {directory}: {error}");
+            }
+        }
+    }
+    Ok(HttpResponse::Ok().insert_header(("Cache-Control", "no-store"))
+        .json(serde_json::json!({"removed": selected.len()})))
 }

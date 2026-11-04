@@ -1,6 +1,21 @@
 {% include "header.html" %}
 <form id="pasta-form" action="{{ args.public_path_as_str() }}/upload" method="POST" enctype="multipart/form-data">
-    <br>
+    <section class="link-format" aria-labelledby="link-format-label">
+        <label id="link-format-label" for="short-link-format">短链接格式</label>
+        <div class="format-controls">
+            <select id="short-link-format" name="short_link_format" data-default="{{ args.short_link_format }}">
+                <option value="lower5">5 位小写字母 · 避开 i / l / o</option>
+                <option value="lower6">6 位小写字母 · 避开 i / l / o</option>
+                <option value="digits6">6 位数字</option>
+                <option value="mixed6">6 位字母数字 · 避开易混字符</option>
+                <option value="custom">自定义格式…</option>
+                <option value="legacy">原版编号</option>
+            </select>
+            <input id="short-link-custom" name="short_link_custom" aria-label="自定义短链接格式" maxlength="256"
+                placeholder="例如 img-[a-z]{5}" hidden disabled>
+        </div>
+        <p id="link-format-hint" class="share-hint" aria-live="polite">可选固定前缀、[字符集]、a-z 范围和 {次数}，例如 img-[a-z]{5}。</p>
+    </section>
     <div id="settings">
         <div>
             <label for="expiration">Expiration <sup> <a href="{{ args.public_path_as_str() }}/guide#expiration">?</a></sup></label><br>
@@ -292,7 +307,7 @@
 <br>
 <br>
 <script type="text/javascript" src="{{ args.public_path_as_str() }}/static/jszip.min.js"></script>
-<script src="{{ args.public_path_as_str() }}/static/upload.js"></script>
+<script src="{{ args.public_path_as_str() }}/static/upload.js?v=shortlinks-1"></script>
 <script>
     const form = document.getElementById("pasta-form");
     const submitButton = document.getElementById("submit-button");
@@ -656,4 +671,5 @@
     }
 </style>
 
+<script src="{{ args.public_path_as_str() }}/static/shortlinks.js"></script>
 {% include "footer.html" %}

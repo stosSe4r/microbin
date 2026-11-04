@@ -9,8 +9,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::Pasta;
 
-use super::db::delete;
-
 pub fn remove_expired(pastas: &mut Vec<Pasta>) {
     // get current time - this will be needed to check which pastas have expired
     let timenow: i64 = match SystemTime::now().duration_since(UNIX_EPOCH) {
@@ -21,6 +19,7 @@ pub fn remove_expired(pastas: &mut Vec<Pasta>) {
         }
     } as i64;
 
+    let previous_len = pastas.len();
     pastas.retain(|p| {
         // keep if:
         //  expiration is `never` or not reached
@@ -35,9 +34,6 @@ pub fn remove_expired(pastas: &mut Vec<Pasta>) {
             // keep
             true
         } else {
-            // remove from database
-            delete(None, Some(p.id));
-
             // remove the file itself
             if let Some(file) = &p.file {
                 if fs::remove_file(format!(
@@ -65,6 +61,10 @@ pub fn remove_expired(pastas: &mut Vec<Pasta>) {
             false
         }
     });
+
+    if pastas.len() != previous_len {
+        super::db::update_all(pastas);
+    }
 
     // Find and remove and attachment folders that 
     // don't actually have an upload in the database pointing

@@ -57,6 +57,12 @@ async function uploadShare(form, button) {
   }
 
   try {
+    // Check before sending files; the final create operation checks again under its lock.
+    const available = await send('POST', endpoint + '/options/availability', JSON.stringify({
+      format: data.get('short_link_format') || '', custom: data.get('short_link_custom') || ''
+    }), undefined, true);
+    const capacity = JSON.parse(available.responseText);
+    if (!capacity.available) throw Object.assign(new Error(capacity.message), {status: 409});
     // Split the complete selection: many small files can also exceed the CDN limit.
     if (total > 64 * 1024 * 1024) {
       data.delete('file');

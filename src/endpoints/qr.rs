@@ -1,10 +1,9 @@
 use crate::args::{Args, ARGS};
 use crate::endpoints::errors::ErrorTemplate;
 use crate::pasta::Pasta;
-use crate::util::animalnumbers::to_u64;
-use crate::util::hashids::to_u64 as hashid_to_u64;
 use crate::util::misc::{self, remove_expired};
 use crate::AppState;
+use crate::util::shortlinks::resolve_id;
 use actix_web::{get, web, HttpResponse};
 use askama::Template;
 
@@ -21,11 +20,7 @@ pub async fn getqr(data: web::Data<AppState>, id: web::Path<String>) -> HttpResp
     // get access to the pasta collection
     let mut pastas = data.pastas.lock().unwrap();
 
-    let u64_id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id).unwrap_or(0)
-    };
+    let u64_id = resolve_id(&id, &pastas);
 
     // remove expired pastas (including this one if needed)
     remove_expired(&mut pastas);

@@ -1,8 +1,7 @@
 use crate::args::Args;
+use crate::util::shortlinks::resolve_id;
 use crate::endpoints::errors::ErrorTemplate;
-use crate::util::animalnumbers::to_u64;
 use crate::util::db::update;
-use crate::util::hashids::to_u64 as hashid_to_u64;
 use crate::util::misc::{decrypt, encrypt, remove_expired};
 use crate::{AppState, Pasta, ARGS};
 use actix_multipart::Multipart;
@@ -25,11 +24,7 @@ struct EditTemplate<'a> {
 pub async fn get_edit(data: web::Data<AppState>, id: web::Path<String>) -> HttpResponse {
     let mut pastas = data.pastas.lock().unwrap();
 
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
+    let id = resolve_id(&id, &pastas);
 
     remove_expired(&mut pastas);
 
@@ -77,11 +72,7 @@ pub async fn get_edit_with_status(
 
     let (id, status) = param.into_inner();
 
-    let intern_id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id).unwrap_or(0)
-    };
+    let intern_id = resolve_id(&id, &pastas);
 
     remove_expired(&mut pastas);
 
@@ -126,12 +117,6 @@ pub async fn post_edit_private(
     id: web::Path<String>,
     mut payload: Multipart,
 ) -> Result<HttpResponse, Error> {
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
-
     let mut password = String::from("");
 
     while let Some(mut field) = payload.try_next().await? {
@@ -144,6 +129,8 @@ pub async fn post_edit_private(
 
     // get access to the pasta collection
     let mut pastas = data.pastas.lock().unwrap();
+
+    let id = resolve_id(&id, &pastas);
 
     // remove expired pastas (including this one if needed)
     remove_expired(&mut pastas);
@@ -214,12 +201,6 @@ pub async fn post_submit_edit_private(
     id: web::Path<String>,
     mut payload: Multipart,
 ) -> Result<HttpResponse, Error> {
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
-
     let mut password = String::from("");
     let mut new_content = String::from("");
 
@@ -243,6 +224,8 @@ pub async fn post_submit_edit_private(
 
     // get access to the pasta collection
     let mut pastas = data.pastas.lock().unwrap();
+
+    let id = resolve_id(&id, &pastas);
 
     // remove expired pastas (including this one if needed)
     remove_expired(&mut pastas);
@@ -313,12 +296,6 @@ pub async fn post_edit(
     id: web::Path<String>,
     mut payload: Multipart,
 ) -> Result<HttpResponse, Error> {
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
-
     let mut new_content = String::from("");
     let mut password = String::from("");
 
@@ -341,6 +318,8 @@ pub async fn post_edit(
     }
 
     let mut pastas = data.pastas.lock().unwrap();
+
+    let id = resolve_id(&id, &pastas);
 
     remove_expired(&mut pastas);
 

@@ -1,8 +1,7 @@
 use crate::args::ARGS;
-use crate::util::animalnumbers::to_u64;
-use crate::util::hashids::to_u64 as hashid_to_u64;
 use crate::util::misc::remove_expired;
 use crate::AppState;
+use crate::util::shortlinks::resolve_id;
 use actix_web::{get, web, Error, HttpResponse};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -18,11 +17,7 @@ pub async fn get_archive(
     // get access to the pasta collection
     let mut pastas = data.pastas.lock().unwrap();
 
-    let id_intern = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
+    let id_intern = resolve_id(&id, &pastas);
 
     // remove expired pastas (including this one if needed)
     remove_expired(&mut pastas);

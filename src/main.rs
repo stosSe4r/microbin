@@ -29,6 +29,7 @@ pub mod util {
     #[cfg(feature = "default")]
     pub mod db_sqlite;
     pub mod hashids;
+    pub mod shortlinks;
     pub mod misc;
     pub mod syntaxhighlighter;
     pub mod telemetry;
@@ -94,9 +95,18 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let data = web::Data::new(AppState {
-        pastas: Mutex::new(read_all()),
-    });
+    util::shortlinks::FormatInput { format: String::new(), custom: String::new() }
+        .pattern().expect("Invalid MICROBIN_SHORT_LINK_FORMAT");
+    let mut pastas = read_all();
+    let mut changed = false;
+    for pasta in &mut pastas {
+        if pasta.slug.is_none() {
+            pasta.slug = Some(pasta.id_as_animals());
+            changed = true;
+        }
+    }
+    if changed { util::db::update_all(&pastas); }
+    let data = web::Data::new(AppState { pastas: Mutex::new(pastas) });
 
     let chunks = web::Data::new(endpoints::chunks::ChunkUploads::new()?);
     let cleanup = chunks.clone();
@@ -172,6 +182,8 @@ async fn main() -> std::io::Result<()> {
                         .route("/start", web::post().to(endpoints::chunks::start))
                         .route("/{id}", web::delete().to(endpoints::chunks::cancel))
                         .route("/{id}/{offset}", web::put().to(endpoints::chunks::append)))
+                    .service(web::resource("/upload/options/availability").route(web::post().to(util::shortlinks::availability)))
+                    .service(web::resource("/list/remove").route(web::post().to(remove::batch_remove)))
                     .service(create::index)
                     .service(auth_admin::auth_admin)
                     .service(auth_admin::auth_admin)

@@ -73,6 +73,8 @@ impl PastaFile {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Pasta {
     pub id: u64,
+    #[serde(default)]
+    pub slug: Option<String>,
     pub content: String,
     pub file: Option<PastaFile>,
     #[serde(default)]
@@ -119,6 +121,9 @@ impl Pasta {
     }
 
     pub fn id_as_animals(&self) -> String {
+        if let Some(slug) = &self.slug {
+            return slug.clone();
+        }
         if ARGS.hash_ids {
             to_hashids(self.id)
         } else {

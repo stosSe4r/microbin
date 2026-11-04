@@ -1,7 +1,6 @@
 use crate::pasta::{Pasta, PastaFile};
-use crate::util::animalnumbers::to_animal_names;
 use crate::util::db::insert;
-use crate::util::hashids::to_hashids;
+use crate::util::shortlinks::FormatInput;
 use crate::util::misc::{encrypt, encrypt_file, is_valid_url};
 use crate::args::{Args, ARGS};
 use crate::AppState;
@@ -123,7 +122,8 @@ pub async fn create(
     } as i64;
 
     let mut new_pasta = Pasta {
-        id: rand::thread_rng().gen::<u16>() as u64,
+        id: rand::thread_rng().gen_range(0..=i64::MAX as u64),
+        slug: None,
         content: String::from(""),
         file: None,
         extension: String::from(""),
@@ -146,12 +146,23 @@ pub async fn create(
     let mut random_key: String = String::from("");
     let mut plain_key: String = String::from("");
     let mut uploader_password = String::from("");
+    let mut link_format = FormatInput { format: String::new(), custom: String::new() };
 
     while let Some(mut field) = payload.try_next().await? {
         let Some(field_name) = field.name() else {
             continue;
         };
         match field_name {
+            "short_link_format" | "short_link_custom" => {
+                let custom = field_name == "short_link_custom";
+                let mut value = Vec::new();
+                while let Some(chunk) = field.try_next().await? {
+                    if value.len() + chunk.len() > 256 { return Err(ErrorBadRequest("短链接格式过长")); }
+                    value.extend_from_slice(&chunk);
+                }
+                let value = String::from_utf8(value).map_err(|_| ErrorBadRequest("短链接格式无效"))?;
+                if custom { link_format.custom = value; } else { link_format.format = value; }
+            }
             "uploader_password" => {
                 while let Some(chunk) = field.try_next().await? {
                     uploader_password
@@ -328,6 +339,7 @@ pub async fn create(
         return Err(ErrorBadRequest("有重名文件，请重命名后重新上传"));
     }
 
+    let pattern = link_format.pattern().map_err(ErrorBadRequest)?;
     let id = new_pasta.id;
 
     if plain_key != *"" && new_pasta.readonly {
@@ -359,11 +371,22 @@ pub async fn create(
     }
 
     let encrypt_server = new_pasta.encrypt_server;
+    let slug;
     {
         let mut pastas = data.pastas.lock().unwrap();
+        crate::util::misc::remove_expired(&mut pastas);
         if pastas.iter().any(|p| p.id == id) {
             return Err(actix_web::error::ErrorConflict("分享编号碰巧重复，请重试"));
         }
+        if let Some(pattern) = pattern {
+            new_pasta.slug = Some(pattern.allocate(&pastas).map_err(actix_web::error::ErrorConflict)?);
+        } else {
+            new_pasta.slug = Some(new_pasta.id_as_animals());
+            if pastas.iter().any(|p| p.id_as_animals() == new_pasta.id_as_animals()) {
+                return Err(actix_web::error::ErrorConflict("分享编号碰巧重复，请重试"));
+            }
+        }
+        slug = new_pasta.id_as_animals();
         // Publish only complete files, while GC cannot mistake them for orphan uploads.
         let directory = format!("{}/attachments/{}", ARGS.data_dir, new_pasta.id_as_animals());
         if !staged_files.is_empty() {
@@ -383,12 +406,6 @@ pub async fn create(
         pastas.push(new_pasta);
         insert(Some(&pastas), pastas.last());
     }
-
-    let slug = if ARGS.hash_ids {
-        to_hashids(id)
-    } else {
-        to_animal_names(id)
-    };
 
     if encrypt_server {
         Ok(HttpResponse::Found()

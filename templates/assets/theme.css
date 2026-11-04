@@ -125,3 +125,31 @@ tbody tr:hover { background: #f8faff; }
 .upload-feedback p { font-size: 13px; color: var(--text-muted); overflow-wrap: anywhere; }
 .upload-feedback button { font-size: 13px; }
 [hidden] { display: none !important; }
+
+.link-format { margin-bottom: 22px; }
+.format-controls { display: flex; gap: 10px; flex-wrap: wrap; }
+.format-controls select { min-width: 240px; }
+.format-controls input { flex: 1; min-width: 200px; font-family: ui-monospace, Consolas, monospace; }
+.link-format .share-hint { margin: 8px 0 0; font-size: 12px; }
+.error-text { color: #b91c1c; }
+.list-heading h1 { font-size: 28px; }
+.batch-toolbar { position: sticky; top: 8px; z-index: 2; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 14px 16px; background: #fffffff2; border: 1px solid var(--border); border-radius: 13px; box-shadow: 0 4px 16px #21355308; backdrop-filter: blur(10px); }
+.select-all-label { display: inline-flex; align-items: center; gap: 7px; margin: 0; cursor: pointer; font-size: 14px; }
+#selection-count { color: var(--text-muted); font-size: 12px; margin-right: auto; }
+.batch-toolbar button { font-size: 12px; padding: 7px 11px; }
+.danger-button { color: #b91c1c; }
+#select-range[aria-pressed="true"] { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+.list-table-wrap { overflow-x: auto; border-radius: 13px; }
+.share-list { width: 100%; min-width: 740px; }
+.share-list td, .share-list th { white-space: nowrap; }
+.selection-cell { width: 44px; padding-right: 6px; }
+input[type="checkbox"] { width: 17px; height: 17px; padding: 0; margin: 0; accent-color: #2563eb; vertical-align: middle; cursor: pointer; }
+.share-list tr.is-selected { background: #eff6ff; }
+.row-actions a, .share-list td > a + a { margin-right: 10px; }
+@media (max-width: 640px) {
+  .format-controls select, .format-controls input { width: 100%; min-width: 0; }
+  .batch-toolbar { gap: 8px; padding: 12px; top: 4px; }
+  #selection-count { min-width: calc(100% - 90px); }
+  .share-list .selection-cell { position: sticky; left: 0; background: #fff; }
+  .share-list tr.is-selected .selection-cell { background: #eff6ff; }
+}

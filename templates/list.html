@@ -1,170 +1,57 @@
 {% include "header.html" %}
 
 
-{% if pastas.is_empty() %}
-<br>
-<p>
-    No uploads yet. 😔 Create one <a href="{{ args.public_path_as_str() }}/">here</a>.
-</p>
-<br>
-{%- else %}
-<h3>Uploads</h3>
-<div style="width: 100%; overflow-x: auto;">
-    {% if args.pure_html %}
-    <table border="1" style="width: 100%; min-width: 720px; white-space: nowrap;">
-        {% else %}
-        <table style="width: 100%; min-width: 720px;">
-            {% endif %}
-            <thead>
-                <th style="width: 25%">
-                    Key
-                </th>
-                <th style="width: 10%">
-                </th>
-                <th style="width: 15%">
-                    Created
-                </th>
-                <th style="width: 15%">
-                    Expiration
-                </th>
-                <th style="width: 15%">
-                    Contents
-                </th>
-
-                <th style="width: 10%">
-                </th>
-                <th style="width: 10%">
-                </th>
-            </thead>
-            <tbody>
-                {% for pasta in pastas %}
-                {% if pasta.pasta_type == "text" && !pasta.private %}
-                <tr>
-                    <td>
-                        <a
-                            href="{{ args.public_path_as_str()}}/upload/{{pasta.id_as_animals()}}">{{pasta.id_as_animals()}}</a>
-                    </td>
-                    <td>
-                        <button type="button" class="copy-button" data-url="{{ pasta.share_url() }}">Copy</button>
-                    </td>
-                    <td>
-                        <time data-unix="{{ pasta.created }}">{{ pasta.created_as_string() }}</time>
-                    </td>
-                    <td>
-                        {% if pasta.expiration == 0 %}
-                        永久
-                        {%- else %}
-                        <time data-unix="{{ pasta.expiration }}">{{ pasta.expiration_as_string() }}</time>
-                        {%- endif %}
-                    </td>
-                    <td>
-                        {% if pasta.content != "" %}
-                        <a style="margin-right:1rem"
-                            href="{{ args.public_path_as_str()}}/raw/{{pasta.id_as_animals()}}">Text</a>
-                        {%- endif %}
-                        {% if pasta.attachments.is_some() %}
-                        <a style="margin-right:1rem"
-                            href="{{ args.public_path_as_str() }}/upload/{{pasta.id_as_animals()}}">
-                            {{ 1 + pasta.attachments.as_ref().unwrap().len() }} 个文件
-                        </a>
-                        {% else if pasta.file.is_some() %}
-                        <a style="margin-right:1rem"
-                            href="{{ args.public_path_as_str() }}/file/{{pasta.id_as_animals()}}">
-                            {% if pasta.file.as_ref().unwrap().is_image() %}
-                            图片
-                            {%- else if pasta.file.as_ref().unwrap().is_video() %}
-                            视频
-                            {%- else %}
-                            文件
-                            {%- endif %}
-                        </a>
-                        {%- endif %}
-                    </td>
-
-                    <td>
-                        {% if pasta.editable %}
-                        <a style="margin-right:1rem"
-                            href="{{ args.public_path_as_str() }}/edit/{{pasta.id_as_animals()}}">Edit</a>
-                        {%- endif %}
-                    </td>
-                    <td>
-                        {% if pasta.editable || pasta.readonly || pasta.encrypt_server %}
-                        <a href="{{ args.public_path_as_str() }}/remove/{{pasta.id_as_animals()}}">Remove</a>
-                        {%- endif %}
-                    </td>
-                </tr>
-                {%- endif %}
-                {% endfor %}
-            </tbody>
-        </table>
-        <br>
-        <h3>URL Redirects</h3>
-        {% if args.pure_html %}
-        <table border="1" style="width: 100%; min-width: 720px; ">
+<section class="list-heading">
+    <div><h1>全部分享</h1><p class="share-hint">勾选多条；按住 Shift 点选可连续选择，触屏可使用「范围选择」。</p></div>
+</section>
+<div id="batch-toolbar" class="batch-toolbar" data-remove-url="{{ args.public_path_as_str() }}/list/remove">
+    <label class="select-all-label"><input type="checkbox" id="select-all"> 全选</label>
+    <span id="selection-count" role="status">已选 0 条</span>
+    <button type="button" id="select-range" aria-pressed="false">范围选择</button>
+    <button type="button" id="clear-selection" disabled>清空选择</button>
+    <button type="button" id="copy-selected" disabled>复制链接</button>
+    <button type="button" id="delete-selected" class="danger-button" disabled>删除所选</button>
+</div>
+<p id="batch-status" class="share-hint" role="status" aria-live="polite"></p>
+<div class="list-table-wrap">
+<table class="share-list">
+    <thead><tr>
+        <th class="selection-cell"><span class="visually-hidden">选择</span></th>
+        <th>分享编号</th><th></th><th>创建时间</th><th>保存至</th><th>内容</th><th>管理</th>
+    </tr></thead>
+    <tbody>
+    {% for pasta in pastas %}
+    {% if !pasta.private %}
+    <tr data-slug="{{ pasta.id_as_animals() }}">
+        <td class="selection-cell"><input type="checkbox" class="share-select" value="{{ pasta.id_as_animals() }}"
+            data-url="{{ pasta.share_url() }}" aria-label="选择分享 {{ pasta.id_as_animals() }}"
+            {% if pasta.editable && !pasta.readonly && !pasta.encrypt_server %}data-deletable="true"{% endif %}></td>
+        <td><a href="{{ args.public_path_as_str() }}/upload/{{ pasta.id_as_animals() }}">{{ pasta.id_as_animals() }}</a></td>
+        <td><button type="button" class="copy-button" data-url="{{ pasta.share_url() }}">Copy</button></td>
+        <td><time data-unix="{{ pasta.created }}">{{ pasta.created_as_string() }}</time></td>
+        <td>{% if pasta.expiration == 0 %}永久{% else %}<time data-unix="{{ pasta.expiration }}">{{ pasta.expiration_as_string() }}</time>{% endif %}</td>
+        <td>
+            {% if pasta.pasta_type == "url" %}
+            <a href="{{ args.public_path_as_str() }}/url/{{ pasta.id_as_animals() }}">网址</a>
             {% else %}
-            <table style="width: 100%; min-width: 720px;">
+                {% if pasta.content != "" %}<a href="{{ args.public_path_as_str() }}/raw/{{ pasta.id_as_animals() }}">文本</a>{% endif %}
+                {% if pasta.attachments.is_some() %}
+                <a href="{{ args.public_path_as_str() }}/upload/{{ pasta.id_as_animals() }}">{{ 1 + pasta.attachments.as_ref().unwrap().len() }} 个文件</a>
+                {% else if pasta.file.is_some() %}
+                <a href="{{ args.public_path_as_str() }}/file/{{ pasta.id_as_animals() }}">{% if pasta.file.as_ref().unwrap().is_image() %}图片{% else if pasta.file.as_ref().unwrap().is_video() %}视频{% else %}文件{% endif %}</a>
                 {% endif %}
-                <thead>
-                    <th style=" width: 25%">
-                        Key
-                    </th>
-                    <th style="width: 10%">
-                    </th>
-                    <th style="width: 15%">
-                        Created
-                    </th>
-                    <th style="width: 15%">
-                        Expiration
-                    </th>
-                    <th style="width: 15%">
-                    </th>
-                    <th style="width: 10%">
-                    </th>
-                    <th style="width: 10%">
-                    </th>
-                </thead>
-                {% for pasta in pastas %}
-                {% if pasta.pasta_type == "url" && !pasta.private %}
-                <tr>
-                    <td>
-                        <a
-                            href="{{ args.public_path_as_str() }}/upload/{{pasta.id_as_animals()}}">{{pasta.id_as_animals()}}</a>
-                    </td>
-                    <td>
-                        <button type="button" class="copy-button" data-url="{{ pasta.share_url() }}">Copy</button>
-                    </td>
-                    <td>
-                        <time data-unix="{{ pasta.created }}">{{ pasta.created_as_string() }}</time>
-                    </td>
-                    <td>
-                        {% if pasta.expiration == 0 %}
-                        永久
-                        {%- else %}
-                        <time data-unix="{{ pasta.expiration }}">{{ pasta.expiration_as_string() }}</time>
-                        {%- endif %}
-                    </td>
-                    <td>
-                        <a style="margin-right:1rem"
-                            href="{{ args.public_path_as_str() }}/url/{{pasta.id_as_animals()}}">打开网址</a>
-                    </td>
-                    <td>
-                        {% if pasta.editable %}
-                        <a style="margin-right:1rem"
-                            href="{{ args.public_path_as_str() }}/edit/{{pasta.id_as_animals()}}">Edit</a>
-                        {%- endif %}
-                    </td>
-                    <td>
-                        {% if pasta.editable || pasta.readonly || pasta.encrypt_server %}
-                        <a href="{{ args.public_path_as_str() }}/remove/{{pasta.id_as_animals()}}">Remove</a>
-                        {%- endif %}
-                    </td>
-                </tr>
-                {%- endif %}
-                {% endfor %}
-                </tbody>
-            </table>
-            <br>
-            {%- endif %}
+            {% endif %}
+        </td>
+        <td class="row-actions">
+            {% if pasta.editable %}<a href="{{ args.public_path_as_str() }}/edit/{{ pasta.id_as_animals() }}">编辑</a>{% endif %}
+            {% if pasta.editable || pasta.readonly || pasta.encrypt_server %}<a href="{{ args.public_path_as_str() }}/remove/{{ pasta.id_as_animals() }}">删除</a>{% endif %}
+        </td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+    </tbody>
+</table>
+<p id="empty-list" hidden>还没有分享内容。<a href="{{ args.public_path_as_str() }}/">创建第一个分享 →</a></p>
 </div>
 
 <script>
@@ -197,4 +84,5 @@
     }
 </style>
 
+<script src="{{ args.public_path_as_str() }}/static/list.js"></script>
 {% include "footer.html" %}

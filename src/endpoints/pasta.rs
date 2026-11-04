@@ -1,12 +1,11 @@
 use crate::args::{Args, ARGS};
 use crate::endpoints::errors::ErrorTemplate;
 use crate::pasta::Pasta;
-use crate::util::animalnumbers::to_u64;
 use crate::util::auth;
 use crate::util::db::update;
-use crate::util::hashids::to_u64 as hashid_to_u64;
 use crate::util::misc::{remove_expired, string_to_qr_svg};
 use crate::AppState;
+use crate::util::shortlinks::resolve_id;
 use actix_multipart::Multipart;
 use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
 use askama::Template;
@@ -31,11 +30,7 @@ fn pastaresponse(
     // get access to the pasta collection
     let mut pastas = data.pastas.lock().unwrap();
 
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
+    let id = resolve_id(&id, &pastas);
 
     // remove expired pastas (including this one if needed)
     remove_expired(&mut pastas);
@@ -162,7 +157,7 @@ pub async fn getpasta(
     // the user attached an owner_token. likely they're the same user that created the pasta
     // but let's verify it just in case
     if let Some(cookie) = req.cookie("owner_token") {
-        if verify_owner_token(cookie.value(), &id) {
+        if verify_owner_token(cookie.value(), &id, &data.pastas.lock().unwrap()) {
             // yay, it really is the same user and their cookie isn't expired
             // so let's skip incrementing the read count
             skip_increment = true;
@@ -174,7 +169,7 @@ pub async fn getpasta(
 
 // when creating a pasta, the owner is issued a token with a 15-second expiration
 // this token is used to avoid incrementing the read count of the pasta when the owner views it
-fn verify_owner_token(token: &str, id: &str) -> bool {
+fn verify_owner_token(token: &str, id: &str, pastas: &[Pasta]) -> bool {
     // decode the token
     if let Ok(numbers) = crate::util::hashids::HARSH.decode(token) {
         if numbers.len() == 2 {
@@ -183,11 +178,7 @@ fn verify_owner_token(token: &str, id: &str) -> bool {
             let timenow = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
 
             // verify the token is valid
-            let target_id = if ARGS.hash_ids {
-                hashid_to_u64(id).unwrap_or(0)
-            } else {
-                to_u64(id).unwrap_or(0)
-            };
+            let target_id = resolve_id(id, pastas);
 
             if token_id == target_id && expiry > timenow {
                 // yay, it's valid
@@ -228,11 +219,7 @@ fn urlresponse(data: web::Data<AppState>, id: web::Path<String>) -> HttpResponse
     // get access to the pasta collection
     let mut pastas = data.pastas.lock().unwrap();
 
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
+    let id = resolve_id(&id, &pastas);
 
     // remove expired pastas (including this one if needed)
     remove_expired(&mut pastas);
@@ -310,11 +297,7 @@ pub async fn getrawpasta(
     // get access to the pasta collection
     let mut pastas = data.pastas.lock().unwrap();
 
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
+    let id = resolve_id(&id, &pastas);
 
     // remove expired pastas (including this one if needed)
     remove_expired(&mut pastas);
@@ -383,11 +366,7 @@ pub async fn postrawpasta(
     // get access to the pasta collection
     let mut pastas = data.pastas.lock().unwrap();
 
-    let id = if ARGS.hash_ids {
-        hashid_to_u64(&id).unwrap_or(0)
-    } else {
-        to_u64(&id.into_inner()).unwrap_or(0)
-    };
+    let id = resolve_id(&id, &pastas);
 
     // remove expired pastas (including this one if needed)
     remove_expired(&mut pastas);

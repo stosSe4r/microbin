@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS pasta (
     read_count INTEGER NOT NULL,
     burn_after_reads INTEGER NOT NULL,
     attachments TEXT,
+    slug TEXT,
     pasta_type TEXT NOT NULL
 );";
 
@@ -30,6 +31,15 @@ fn connect() -> Connection {
         .expect("Failed to open SQLite database!");
     conn.execute_batch(SCHEMA)
         .expect("Failed to create SQLite table for Pasta!");
+    let has_slug = conn.prepare("PRAGMA table_info(pasta)").unwrap()
+        .query_map([], |row| row.get::<_, String>(1)).unwrap()
+        .any(|name| name.unwrap() == "slug");
+    if !has_slug {
+        conn.execute_batch("ALTER TABLE pasta ADD COLUMN slug TEXT;")
+            .expect("Failed to add short-link column");
+    }
+    conn.execute_batch("CREATE UNIQUE INDEX IF NOT EXISTS pasta_slug ON pasta(slug);")
+        .expect("Failed to index short links");
     conn
 }
 
@@ -57,6 +67,7 @@ fn select_all(conn: &Connection) -> rusqlite::Result<Vec<Pasta>> {
     let pasta_iter = stmt.query_map([], |row| {
         Ok(Pasta {
             id: row.get("id")?,
+            slug: row.get("slug")?,
             content: row.get("content")?,
             file: if let (Some(file_name), Some(file_size)) = (
                 row.get::<_, Option<String>>("file_name")?,
@@ -127,8 +138,9 @@ fn insert_into(conn: &Connection, pasta: &Pasta) -> rusqlite::Result<()> {
                 read_count,
                 burn_after_reads,
                 pasta_type,
-                attachments
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+                attachments,
+                slug
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
         params![
             pasta.id,
             pasta.content,
@@ -148,6 +160,7 @@ fn insert_into(conn: &Connection, pasta: &Pasta) -> rusqlite::Result<()> {
             pasta.burn_after_reads,
             pasta.pasta_type,
             serde_json::to_string(&pasta.attachments).expect("Failed to serialize attachments"),
+            pasta.slug,
         ],
     )?;
     Ok(())
@@ -174,7 +187,8 @@ pub fn update(pasta: &Pasta) {
             read_count = ?15,
             burn_after_reads = ?16,
             pasta_type = ?17,
-            attachments = ?18
+            attachments = ?18,
+            slug = ?19
         WHERE id = ?1;",
         params![
             pasta.id,
@@ -195,6 +209,7 @@ pub fn update(pasta: &Pasta) {
             pasta.burn_after_reads,
             pasta.pasta_type,
             serde_json::to_string(&pasta.attachments).expect("Failed to serialize attachments"),
+            pasta.slug,
         ],
     )
     .expect("Failed to update pasta.");
@@ -222,6 +237,7 @@ mod tests {
         conn.execute_batch(SCHEMA).unwrap();
         let mut pasta = Pasta {
             id: 42,
+            slug: Some("abcde".into()),
             content: "https://example.org/中文".into(),
             file: Some(PastaFile {
                 name: "empty.bin".into(),

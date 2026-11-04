@@ -119,6 +119,9 @@ pub struct Args {
     #[clap(long, env = "MICROBIN_CUSTOM_CSS")]
     pub custom_css: Option<String>,
 
+    #[clap(long, env = "MICROBIN_SHORT_LINK_FORMAT", default_value = "lower5")]
+    pub short_link_format: String,
+
     #[clap(long, env = "MICROBIN_HASH_IDS")]
     pub hash_ids: bool,
 
@@ -238,6 +241,7 @@ impl Args {
             no_file_upload: self.no_file_upload,
             custom_css: self.custom_css,
             hash_ids: self.hash_ids,
+            short_link_format: self.short_link_format,
             disable_telemetry: self.disable_telemetry,
             encryption_client_side: self.encryption_client_side,
             encryption_server_side: self.encryption_server_side,

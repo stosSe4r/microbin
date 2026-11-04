@@ -261,7 +261,7 @@ def check():
         slug = upload(base, tokens=[token])
         assert len(request(f'{base}/file/{slug}')[2]) == 1048576
         print('PASS: chunk uploads obey file-upload toggle and site size limits')
-    with server(MICROBIN_HASH_IDS='false', MICROBIN_PUBLIC_PATH='') as (base, _):
+    with server(MICROBIN_HASH_IDS='false', MICROBIN_SHORT_LINK_FORMAT='legacy', MICROBIN_PUBLIC_PATH='') as (base, _):
         slug = upload(base, 'animal identifier')
         status, headers, _ = request(f'{base}/{slug}')
         assert status == 302 and headers['Location'] == f'/p/{slug}'
