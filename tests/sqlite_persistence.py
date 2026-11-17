@@ -48,6 +48,7 @@ def running(directory, base, port, **settings):
 def rows(directory):
     with sqlite3.connect(directory / 'store/database.sqlite') as conn:
         assert conn.execute('PRAGMA integrity_check').fetchone() == ('ok',)
+        assert conn.execute('PRAGMA journal_mode').fetchone() == ('wal',)
         return conn.execute('SELECT * FROM pasta ORDER BY id').fetchall()
 
 

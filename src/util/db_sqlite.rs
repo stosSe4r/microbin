@@ -1,5 +1,7 @@
 use bytesize::ByteSize;
+use once_cell::sync::Lazy;
 use rusqlite::{params, Connection};
+use std::sync::{Mutex, MutexGuard};
 
 use crate::{args::ARGS, pasta::PastaFile, Pasta};
 
@@ -26,9 +28,21 @@ CREATE TABLE IF NOT EXISTS pasta (
     pasta_type TEXT NOT NULL
 );";
 
-fn connect() -> Connection {
+// Keep the connection and page cache alive instead of reopening and checking
+// the schema on every access. The mutex serializes in-process share writes.
+static CONNECTION: Lazy<Mutex<Connection>> = Lazy::new(|| Mutex::new(open()));
+
+fn connect() -> MutexGuard<'static, Connection> {
+    CONNECTION.lock().expect("SQLite connection mutex poisoned")
+}
+
+fn open() -> Connection {
     let conn = Connection::open(format!("{}/database.sqlite", ARGS.data_dir))
         .expect("Failed to open SQLite database!");
+    super::sqlite::configure(&conn).expect("Failed to configure SQLite database");
+    // Share creation/deletion stays durable across a host power failure.
+    conn.pragma_update(None, "synchronous", "FULL")
+        .expect("Failed to configure SQLite durability");
     conn.execute_batch(SCHEMA)
         .expect("Failed to create SQLite table for Pasta!");
     let has_slug = conn.prepare("PRAGMA table_info(pasta)").unwrap()

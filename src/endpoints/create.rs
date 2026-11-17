@@ -370,6 +370,15 @@ pub async fn create(
         }
     }
 
+    // Persist file contents before publishing their paths in the durable share DB.
+    // Flush potentially large uploads off the async worker and outside the share lock.
+    staged_files = web::block(move || -> std::io::Result<_> {
+        for (_, staged) in &staged_files {
+            staged.as_file().sync_all()?;
+        }
+        Ok(staged_files)
+    }).await??;
+
     let encrypt_server = new_pasta.encrypt_server;
     let slug;
     {
@@ -389,7 +398,8 @@ pub async fn create(
         slug = new_pasta.id_as_animals();
         // Publish only complete files, while GC cannot mistake them for orphan uploads.
         let directory = format!("{}/attachments/{}", ARGS.data_dir, new_pasta.id_as_animals());
-        if !staged_files.is_empty() {
+        let has_files = !staged_files.is_empty();
+        if has_files {
             std::fs::create_dir_all(&directory)?;
         }
         for (file, staged) in staged_files {
@@ -402,6 +412,12 @@ pub async fn create(
                 new_pasta.attachments.get_or_insert_with(Vec::new).push(file);
             }
             new_pasta.pasta_type = String::from("text");
+        }
+        #[cfg(unix)]
+        if has_files {
+            // Sync both the renames and this new directory's entry in its parent.
+            std::fs::File::open(&directory)?.sync_all()?;
+            std::fs::File::open(format!("{}/attachments", ARGS.data_dir))?.sync_all()?;
         }
         pastas.push(new_pasta);
         insert(Some(&pastas), pastas.last());

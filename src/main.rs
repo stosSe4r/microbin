@@ -30,6 +30,8 @@ pub mod util {
     pub mod db_json;
     #[cfg(feature = "default")]
     pub mod db_sqlite;
+    #[cfg(feature = "default")]
+    pub mod sqlite;
     pub mod hashids;
     pub mod shortlinks;
     pub mod misc;

@@ -61,9 +61,10 @@ struct Event {
 impl AuditLog {
     pub fn open(path: &Path) -> rusqlite::Result<Self> {
         let connection = Connection::open(path)?;
-        connection.busy_timeout(Duration::from_secs(5))?;
         // Set before creating tables so expired pages can be reclaimed without a full VACUUM.
-        connection.execute_batch("PRAGMA auto_vacuum=INCREMENTAL; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
+        connection.execute_batch("PRAGMA auto_vacuum=INCREMENTAL;")?;
+        super::sqlite::configure(&connection)?;
+        connection.pragma_update(None, "synchronous", "NORMAL")?;
         connection.execute_batch(SCHEMA)?;
         let log = Self { connection: Mutex::new(connection) };
         log.cleanup(Utc::now().timestamp())?;
