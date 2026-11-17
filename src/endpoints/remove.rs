@@ -166,7 +166,11 @@ pub struct BatchRemove {
     slugs: Vec<String>,
 }
 
-pub async fn batch_remove(data: web::Data<AppState>, input: web::Json<BatchRemove>) -> Result<HttpResponse, Error> {
+pub async fn batch_remove(data: web::Data<AppState>, input: web::Json<BatchRemove>, request: actix_web::HttpRequest) -> Result<HttpResponse, Error> {
+    #[cfg(feature = "default")]
+    if let Some(targets) = actix_web::HttpMessage::extensions(&request).get::<crate::util::audit::Targets>() {
+        *targets.0.borrow_mut() = Some(input.slugs.clone());
+    }
     if ARGS.no_listing { return Err(actix_web::error::ErrorForbidden("本站未启用列表管理")); }
     if input.slugs.is_empty() { return Err(actix_web::error::ErrorBadRequest("请先选择分享")); }
     let selected: std::collections::HashSet<_> = input.slugs.iter().collect();

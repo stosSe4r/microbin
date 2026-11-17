@@ -22,6 +22,8 @@ pub mod args;
 pub mod pasta;
 
 pub mod util {
+    #[cfg(feature = "default")]
+    pub mod audit;
     pub mod animalnumbers;
     pub mod auth;
     pub mod db;
@@ -108,6 +110,15 @@ async fn main() -> std::io::Result<()> {
     if changed { util::db::update_all(&pastas); }
     let data = web::Data::new(AppState { pastas: Mutex::new(pastas) });
 
+    #[cfg(feature = "default")]
+    let audit = {
+        let log = util::audit::AuditLog::open(&std::path::Path::new(&ARGS.data_dir).join("audit.sqlite"))
+            .map_err(std::io::Error::other)?;
+        let log = web::Data::new(log);
+        util::audit::AuditLog::start_cleanup(log.clone());
+        log
+    };
+
     let chunks = web::Data::new(endpoints::chunks::ChunkUploads::new()?);
     let cleanup = chunks.clone();
     actix_web::rt::spawn(async move {
@@ -123,7 +134,10 @@ async fn main() -> std::io::Result<()> {
     }
 
     HttpServer::new(move || {
-        App::new()
+        let app = App::new();
+        #[cfg(feature = "default")]
+        let app = app.app_data(audit.clone());
+        let app = app
             .app_data(data.clone())
             .app_data(chunks.clone())
             .wrap(middleware::NormalizePath::trim())
@@ -201,7 +215,10 @@ async fn main() -> std::io::Result<()> {
                     .service(web::resource("/upload").route(web::post().to(create::create)))
                     .service(create::index_with_status)
             )
-            .default_service(web::route().to(errors::not_found))
+            .default_service(web::route().to(errors::not_found));
+        #[cfg(feature = "default")]
+        let app = app.wrap(middleware::from_fn(util::audit::record));
+        app
     })
     .bind_auto_h2c((ARGS.bind, ARGS.port))?
     .workers(ARGS.threads as usize)
